@@ -1,0 +1,32 @@
+package server
+
+import (
+	"time"
+
+	v1 "kratos-demo/api/helloworld/v1"
+	"kratos-demo/internal/conf"
+	"kratos-demo/internal/service"
+
+	"github.com/go-kratos/kratos/v2/log"
+	"github.com/go-kratos/kratos/v2/middleware/logging"
+	"github.com/go-kratos/kratos/v2/middleware/recovery"
+	httptransport "github.com/go-kratos/kratos/v2/transport/http"
+	"github.com/google/wire"
+)
+
+var ProviderSet = wire.NewSet(NewHTTPServer, NewGRPCServer)
+
+func NewHTTPServer(c *conf.Server, gs *service.GreeterService, logger log.Logger) *httptransport.Server {
+	timeout := time.Duration(c.GetHttp().GetTimeout()) * time.Second
+	srv := httptransport.NewServer(
+		httptransport.Network(c.GetHttp().GetNetwork()),
+		httptransport.Address(c.GetHttp().GetAddr()),
+		httptransport.Timeout(timeout),
+		httptransport.Middleware(
+			logging.Server(logger),
+			recovery.Recovery(),
+		),
+	)
+	v1.RegisterGreeterHTTPServer(srv, gs)
+	return srv
+}
