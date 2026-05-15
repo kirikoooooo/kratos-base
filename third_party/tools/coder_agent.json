@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "coder_agent",
+    "description": "适合处理编码、实现、原型设计、接口定义等任务。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "要交给 coder 的具体任务描述。"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

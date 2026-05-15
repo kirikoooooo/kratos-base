@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "router_agent",
+    "description": "适合处理任务路由、任务拆解、委派策略与协调决策。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "要交给 router 的任务背景、拆解目标或协调决策问题。"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

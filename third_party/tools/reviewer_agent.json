@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "reviewer_agent",
+    "description": "适合处理代码审查、设计评审、风险识别、边界条件检查等任务。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "要交给 reviewer 的审查目标、审查内容或风险分析任务。"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

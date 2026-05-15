@@ -232,6 +232,7 @@ func (x *Data) GetDatabase() *Data_Database {
 type Runtime struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Remotes       []*Runtime_RemoteAgent `protobuf:"bytes,1,rep,name=remotes,proto3" json:"remotes,omitempty"`
+	Sandbox       *Runtime_Sandbox       `protobuf:"bytes,2,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -269,6 +270,13 @@ func (*Runtime) Descriptor() ([]byte, []int) {
 func (x *Runtime) GetRemotes() []*Runtime_RemoteAgent {
 	if x != nil {
 		return x.Remotes
+	}
+	return nil
+}
+
+func (x *Runtime) GetSandbox() *Runtime_Sandbox {
+	if x != nil {
+		return x.Sandbox
 	}
 	return nil
 }
@@ -565,6 +573,90 @@ func (x *Runtime_RemoteAgent) GetTimeout() int64 {
 	return 0
 }
 
+type Runtime_Sandbox struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	ApiKey        string                 `protobuf:"bytes,2,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	BaseUrl       string                 `protobuf:"bytes,3,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	Template      string                 `protobuf:"bytes,4,opt,name=template,proto3" json:"template,omitempty"`
+	Timeout       int64                  `protobuf:"varint,5,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	SkillCommand  string                 `protobuf:"bytes,6,opt,name=skill_command,json=skillCommand,proto3" json:"skill_command,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Runtime_Sandbox) Reset() {
+	*x = Runtime_Sandbox{}
+	mi := &file_internal_conf_conf_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Runtime_Sandbox) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Runtime_Sandbox) ProtoMessage() {}
+
+func (x *Runtime_Sandbox) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Runtime_Sandbox.ProtoReflect.Descriptor instead.
+func (*Runtime_Sandbox) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 1}
+}
+
+func (x *Runtime_Sandbox) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Runtime_Sandbox) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
+}
+
+func (x *Runtime_Sandbox) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
+	}
+	return ""
+}
+
+func (x *Runtime_Sandbox) GetTemplate() string {
+	if x != nil {
+		return x.Template
+	}
+	return ""
+}
+
+func (x *Runtime_Sandbox) GetTimeout() int64 {
+	if x != nil {
+		return x.Timeout
+	}
+	return 0
+}
+
+func (x *Runtime_Sandbox) GetSkillCommand() string {
+	if x != nil {
+		return x.SkillCommand
+	}
+	return ""
+}
+
 var File_internal_conf_conf_proto protoreflect.FileDescriptor
 
 const file_internal_conf_conf_proto_rawDesc = "" +
@@ -597,13 +689,21 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\bdatabase\x18\x01 \x01(\v2\x19.kratos.api.Data.DatabaseR\bdatabase\x1a:\n" +
 	"\bDatabase\x12\x16\n" +
 	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x16\n" +
-	"\x06source\x18\x02 \x01(\tR\x06source\"\x9b\x01\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\"\x87\x03\n" +
 	"\aRuntime\x129\n" +
-	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x1aU\n" +
+	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x125\n" +
+	"\asandbox\x18\x02 \x01(\v2\x1b.kratos.api.Runtime.SandboxR\asandbox\x1aU\n" +
 	"\vRemoteAgent\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x18\n" +
-	"\atimeout\x18\x03 \x01(\x03R\atimeoutB Z\x1ekratos-demo/internal/conf;confb\x06proto3"
+	"\atimeout\x18\x03 \x01(\x03R\atimeout\x1a\xb2\x01\n" +
+	"\aSandbox\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x17\n" +
+	"\aapi_key\x18\x02 \x01(\tR\x06apiKey\x12\x19\n" +
+	"\bbase_url\x18\x03 \x01(\tR\abaseUrl\x12\x1a\n" +
+	"\btemplate\x18\x04 \x01(\tR\btemplate\x12\x18\n" +
+	"\atimeout\x18\x05 \x01(\x03R\atimeout\x12#\n" +
+	"\rskill_command\x18\x06 \x01(\tR\fskillCommandB Z\x1ekratos-demo/internal/conf;confb\x06proto3"
 
 var (
 	file_internal_conf_conf_proto_rawDescOnce sync.Once
@@ -617,7 +717,7 @@ func file_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_internal_conf_conf_proto_rawDescData
 }
 
-var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
+var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 11)
 var file_internal_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),           // 0: kratos.api.Bootstrap
 	(*AI)(nil),                  // 1: kratos.api.AI
@@ -629,22 +729,24 @@ var file_internal_conf_conf_proto_goTypes = []any{
 	(*Server_GRPC)(nil),         // 7: kratos.api.Server.GRPC
 	(*Data_Database)(nil),       // 8: kratos.api.Data.Database
 	(*Runtime_RemoteAgent)(nil), // 9: kratos.api.Runtime.RemoteAgent
+	(*Runtime_Sandbox)(nil),     // 10: kratos.api.Runtime.Sandbox
 }
 var file_internal_conf_conf_proto_depIdxs = []int32{
-	2, // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
-	3, // 1: kratos.api.Bootstrap.data:type_name -> kratos.api.Data
-	1, // 2: kratos.api.Bootstrap.ai:type_name -> kratos.api.AI
-	4, // 3: kratos.api.Bootstrap.runtime:type_name -> kratos.api.Runtime
-	5, // 4: kratos.api.AI.openai:type_name -> kratos.api.AI.OpenAI
-	6, // 5: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
-	7, // 6: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
-	8, // 7: kratos.api.Data.database:type_name -> kratos.api.Data.Database
-	9, // 8: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
-	9, // [9:9] is the sub-list for method output_type
-	9, // [9:9] is the sub-list for method input_type
-	9, // [9:9] is the sub-list for extension type_name
-	9, // [9:9] is the sub-list for extension extendee
-	0, // [0:9] is the sub-list for field type_name
+	2,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
+	3,  // 1: kratos.api.Bootstrap.data:type_name -> kratos.api.Data
+	1,  // 2: kratos.api.Bootstrap.ai:type_name -> kratos.api.AI
+	4,  // 3: kratos.api.Bootstrap.runtime:type_name -> kratos.api.Runtime
+	5,  // 4: kratos.api.AI.openai:type_name -> kratos.api.AI.OpenAI
+	6,  // 5: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
+	7,  // 6: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
+	8,  // 7: kratos.api.Data.database:type_name -> kratos.api.Data.Database
+	9,  // 8: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
+	10, // 9: kratos.api.Runtime.sandbox:type_name -> kratos.api.Runtime.Sandbox
+	10, // [10:10] is the sub-list for method output_type
+	10, // [10:10] is the sub-list for method input_type
+	10, // [10:10] is the sub-list for extension type_name
+	10, // [10:10] is the sub-list for extension extendee
+	0,  // [0:10] is the sub-list for field type_name
 }
 
 func init() { file_internal_conf_conf_proto_init() }
@@ -658,7 +760,7 @@ func file_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_conf_conf_proto_rawDesc), len(file_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   10,
+			NumMessages:   11,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

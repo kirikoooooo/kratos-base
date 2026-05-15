@@ -11,12 +11,13 @@ import (
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
 	actorpkg "kratos-demo/third_party/actor"
+	toolcatalog "kratos-demo/third_party/tools"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
-	"github.com/tmc/langchaingo/tools"
+	langtools "github.com/tmc/langchaingo/tools"
 	grpcclient "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
@@ -60,20 +61,31 @@ var newRuntimeLLM = func(config *conf.AI, logger *log.Helper) (llms.Model, error
 }
 
 type langChainAgentRuntime struct {
-	config        *conf.AI
-	runtimeConfig *conf.Runtime
-	log           *log.Helper
-	pid           actorpkg.PID
-	trace         biz.DelegationTraceStore
+	config         *conf.AI
+	runtimeConfig  *conf.Runtime
+	log            *log.Helper
+	pid            actorpkg.PID
+	trace          biz.DelegationTraceStore
+	sandbox        sandboxExecutor
+	toolCatalog    *toolcatalog.Catalog
+	toolCatalogErr error
 }
 
 func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace biz.DelegationTraceStore, logger log.Logger) biz.AgentRuntime {
+	helper := log.NewHelper(logger)
+	catalog, err := toolcatalog.DefaultCatalog()
+	if err != nil {
+		helper.Warnf("load embedded tool catalog failed: %v", err)
+	}
 	return &langChainAgentRuntime{
-		config:        config,
-		runtimeConfig: runtimeConfig,
-		log:           log.NewHelper(logger),
-		pid:           actorpkg.NewPID(runtimeActorPID, "langchain-runtime"),
-		trace:         trace,
+		config:         config,
+		runtimeConfig:  runtimeConfig,
+		log:            helper,
+		pid:            actorpkg.NewPID(runtimeActorPID, "langchain-runtime"),
+		trace:          trace,
+		sandbox:        newSandboxExecutor(runtimeConfig, helper),
+		toolCatalog:    catalog,
+		toolCatalogErr: err,
 	}
 }
 
@@ -184,29 +196,37 @@ func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*
 		return nil, err
 	}
 
-	agentTools := []tools.Tool{
-		newLocalAgentTool("coder_agent", "适合处理编码、实现、原型设计、接口定义等任务。输入应为要交给 coder 的具体任务描述。", func(toolCtx context.Context, input string) (string, error) {
+	bindings := []toolcatalog.BindingSpec{
+		{Name: "coder_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
 			result, err := r.dispatchSubTask(toolCtx, biz.TaskAgentCoder, input)
 			if err != nil {
 				return "", err
 			}
 			return formatTaskResult("CoderAgent", result), nil
-		}),
-		newLocalAgentTool("reviewer_agent", "适合处理代码审查、设计评审、风险识别、边界条件检查等任务。输入应为待审查内容或审查目标。", func(toolCtx context.Context, input string) (string, error) {
+		}},
+		{Name: "reviewer_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
 			result, err := r.dispatchSubTask(toolCtx, biz.TaskAgentReviewer, input)
 			if err != nil {
 				return "", err
 			}
 			return formatTaskResult("ReviewerAgent", result), nil
-		}),
+		}},
+	}
+	agentTools, err := r.buildManagedTools(r.appendSandboxBindings(bindings))
+	if err != nil {
+		return nil, err
 	}
 
-	systemPrompt := strings.Join([]string{
+	promptLines := []string{
 		"你是 RouterAgent，负责协调本地 Agent 完成任务。",
 		"请优先使用可用函数来完成编码、实现、审查等子任务，而不是直接假设工具执行结果。",
 		"当任务同时包含开发与审查时，优先调用 coder_agent，再根据结果调用 reviewer_agent。",
 		"当你已经拿到足够的工具结果后，再直接输出最终中文结论。",
-	}, "\n")
+	}
+	if r.hasSandboxTools() {
+		promptLines = append(promptLines, "如需要在 E2B Code Sandbox 中执行系统命令或 skills，请调用 sandbox_exec 或 sandbox_skill，并基于返回结果继续决策。")
+	}
+	systemPrompt := strings.Join(promptLines, "\n")
 
 	agent := agents.NewOpenAIFunctionsAgent(
 		modelClient,
@@ -222,30 +242,38 @@ func (r *langChainAgentRuntime) runCoder(ctx context.Context, prompt string) (*t
 		return nil, err
 	}
 
-	agentTools := []tools.Tool{
-		newLocalAgentTool("router_agent", "适合处理任务路由、任务拆解、委派策略与协调决策。输入应为需要 router 帮你判断或拆解的具体任务。", func(toolCtx context.Context, input string) (string, error) {
+	bindings := []toolcatalog.BindingSpec{
+		{Name: "router_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
 			result, err := r.dispatchSubTask(toolCtx, biz.TaskAgentRouter, input)
 			if err != nil {
 				return "", err
 			}
 			return formatTaskResult("RouterAgent", result), nil
-		}),
-		newLocalAgentTool("reviewer_agent", "适合处理代码审查、设计评审、边界条件检查与风险识别。输入应为需要 reviewer 审查的内容。", func(toolCtx context.Context, input string) (string, error) {
+		}},
+		{Name: "reviewer_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
 			result, err := r.dispatchSubTask(toolCtx, biz.TaskAgentReviewer, input)
 			if err != nil {
 				return "", err
 			}
 			return formatTaskResult("ReviewerAgent", result), nil
-		}),
+		}},
+	}
+	agentTools, err := r.buildManagedTools(r.appendSandboxBindings(bindings))
+	if err != nil {
+		return nil, err
 	}
 
-	systemPrompt := strings.Join([]string{
+	promptLines := []string{
 		"你是 CoderAgent，负责真实完成实现、编码、原型设计、接口定义与技术方案落地。",
 		"请直接基于用户输入给出真实中文结果，不要返回模板化占位文本，不要假设自己已经完成未执行的操作。",
 		"当任务更适合先做任务拆解、协调或改由 RouterAgent 统筹时，调用 router_agent。",
 		"当你已经产出实现方案且需要补充审查意见时，可以调用 reviewer_agent。",
 		"如果任务可以直接回答，就直接输出最终中文结果。",
-	}, "\n")
+	}
+	if r.hasSandboxTools() {
+		promptLines = append(promptLines, "如需要进入 E2B Code Sandbox 执行系统命令、验证实现、运行构建或调用 skills，请使用 sandbox_exec 或 sandbox_skill。")
+	}
+	systemPrompt := strings.Join(promptLines, "\n")
 
 	agent := agents.NewOpenAIFunctionsAgent(
 		modelClient,
@@ -265,6 +293,41 @@ func (r *langChainAgentRuntime) runReviewer(ctx context.Context, prompt string) 
 
 func (r *langChainAgentRuntime) newLLM() (llms.Model, error) {
 	return newRuntimeLLM(r.config, r.log)
+}
+
+func (r *langChainAgentRuntime) buildManagedTools(bindings []toolcatalog.BindingSpec) ([]langtools.Tool, error) {
+	if r == nil {
+		return nil, errors.New("agent runtime is nil")
+	}
+	if r.toolCatalogErr != nil {
+		return nil, fmt.Errorf("tool catalog unavailable: %w", r.toolCatalogErr)
+	}
+	if r.toolCatalog == nil {
+		return nil, errors.New("tool catalog is nil")
+	}
+	return r.toolCatalog.BindLangChainTools(bindings)
+}
+
+func (r *langChainAgentRuntime) hasSandboxTools() bool {
+	return r != nil && r.sandbox != nil && r.sandbox.Enabled()
+}
+
+func (r *langChainAgentRuntime) appendSandboxBindings(bindings []toolcatalog.BindingSpec) []toolcatalog.BindingSpec {
+	if !r.hasSandboxTools() {
+		return bindings
+	}
+	return append(bindings,
+		toolcatalog.BindingSpec{Name: "sandbox_exec", Handler: func(toolCtx context.Context, input string) (string, error) {
+			return r.sandbox.ExecuteCommand(toolCtx, input)
+		}},
+		toolcatalog.BindingSpec{Name: "sandbox_skill", Handler: func(toolCtx context.Context, input string) (string, error) {
+			skillName, args, err := parseSkillInvocation(input)
+			if err != nil {
+				return "", err
+			}
+			return r.sandbox.ExecuteSkill(toolCtx, skillName, args)
+		}},
+	)
 }
 
 func (r *langChainAgentRuntime) runFunctionsAgent(ctx context.Context, agent agents.Agent, prompt, summary string) (*taskv1.TaskResult, error) {
@@ -505,30 +568,4 @@ func currentTaskID(ctx context.Context) string {
 	}
 	taskID, _ := ctx.Value(taskIDContextKey{}).(string)
 	return taskID
-}
-
-type localAgentTool struct {
-	name        string
-	description string
-	run         func(ctx context.Context, input string) (string, error)
-}
-
-func newLocalAgentTool(name, description string, run func(ctx context.Context, input string) (string, error)) tools.Tool {
-	return &localAgentTool{
-		name:        name,
-		description: description,
-		run:         run,
-	}
-}
-
-func (t *localAgentTool) Name() string {
-	return t.name
-}
-
-func (t *localAgentTool) Description() string {
-	return t.description
-}
-
-func (t *localAgentTool) Call(ctx context.Context, input string) (string, error) {
-	return t.run(ctx, strings.TrimSpace(input))
 }

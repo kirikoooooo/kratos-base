@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "sandbox_exec",
+    "description": "在 E2B Code Sandbox 中执行操作系统命令，并返回 stdout、stderr 与退出码。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "要在沙箱中执行的命令文本，例如 ls -la、go test ./... 或 python script.py。"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

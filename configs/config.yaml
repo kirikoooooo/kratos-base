@@ -21,3 +21,10 @@ runtime:
     - agent: coder
       target: 127.0.0.1:9001
       timeout: 8
+  sandbox:
+    enabled: false
+    api_key: ""
+    base_url: "https://api.e2b.dev"
+    template: "base"
+    timeout: 60
+    skill_command: "skills run"

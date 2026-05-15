@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "sandbox_skill",
+    "description": "在 E2B Code Sandbox 中执行技能命令。输入可使用两种格式：第一行写 skill 名称，后续内容写参数；或传入 JSON 字符串 {\"skill\":\"...\",\"args\":\"...\"}。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "skill 调用内容，例如第一行写 build，第二行写 ./cmd/kratos-demo；或传入 JSON。"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}
