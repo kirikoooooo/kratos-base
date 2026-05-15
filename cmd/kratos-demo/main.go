@@ -47,7 +47,7 @@ func main() {
 		panic(err)
 	}
 
-	app, cleanup, err := wireApp(bc.GetServer(), bc.GetData(), bc.GetAi(), logger)
+	app, cleanup, err := wireApp(bc.GetServer(), bc.GetData(), bc.GetAi(), bc.GetRuntime(), logger)
 	if err != nil {
 		panic(err)
 	}

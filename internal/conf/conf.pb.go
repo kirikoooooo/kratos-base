@@ -26,6 +26,7 @@ type Bootstrap struct {
 	Server        *Server                `protobuf:"bytes,1,opt,name=server,proto3" json:"server,omitempty"`
 	Data          *Data                  `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	Ai            *AI                    `protobuf:"bytes,3,opt,name=ai,proto3" json:"ai,omitempty"`
+	Runtime       *Runtime               `protobuf:"bytes,4,opt,name=runtime,proto3" json:"runtime,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -77,6 +78,13 @@ func (x *Bootstrap) GetData() *Data {
 func (x *Bootstrap) GetAi() *AI {
 	if x != nil {
 		return x.Ai
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetRuntime() *Runtime {
+	if x != nil {
+		return x.Runtime
 	}
 	return nil
 }
@@ -221,6 +229,50 @@ func (x *Data) GetDatabase() *Data_Database {
 	return nil
 }
 
+type Runtime struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Remotes       []*Runtime_RemoteAgent `protobuf:"bytes,1,rep,name=remotes,proto3" json:"remotes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Runtime) Reset() {
+	*x = Runtime{}
+	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Runtime) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Runtime) ProtoMessage() {}
+
+func (x *Runtime) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Runtime.ProtoReflect.Descriptor instead.
+func (*Runtime) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *Runtime) GetRemotes() []*Runtime_RemoteAgent {
+	if x != nil {
+		return x.Remotes
+	}
+	return nil
+}
+
 type AI_OpenAI struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	ApiKey        string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
@@ -232,7 +284,7 @@ type AI_OpenAI struct {
 
 func (x *AI_OpenAI) Reset() {
 	*x = AI_OpenAI{}
-	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_internal_conf_conf_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -244,7 +296,7 @@ func (x *AI_OpenAI) String() string {
 func (*AI_OpenAI) ProtoMessage() {}
 
 func (x *AI_OpenAI) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_internal_conf_conf_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -292,7 +344,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_internal_conf_conf_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -304,7 +356,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_internal_conf_conf_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -352,7 +404,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_internal_conf_conf_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -364,7 +416,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_internal_conf_conf_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -411,7 +463,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_internal_conf_conf_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -423,7 +475,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_internal_conf_conf_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -453,16 +505,77 @@ func (x *Data_Database) GetSource() string {
 	return ""
 }
 
+type Runtime_RemoteAgent struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Agent         string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
+	Target        string                 `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	Timeout       int64                  `protobuf:"varint,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Runtime_RemoteAgent) Reset() {
+	*x = Runtime_RemoteAgent{}
+	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Runtime_RemoteAgent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Runtime_RemoteAgent) ProtoMessage() {}
+
+func (x *Runtime_RemoteAgent) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Runtime_RemoteAgent.ProtoReflect.Descriptor instead.
+func (*Runtime_RemoteAgent) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0}
+}
+
+func (x *Runtime_RemoteAgent) GetAgent() string {
+	if x != nil {
+		return x.Agent
+	}
+	return ""
+}
+
+func (x *Runtime_RemoteAgent) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *Runtime_RemoteAgent) GetTimeout() int64 {
+	if x != nil {
+		return x.Timeout
+	}
+	return 0
+}
+
 var File_internal_conf_conf_proto protoreflect.FileDescriptor
 
 const file_internal_conf_conf_proto_rawDesc = "" +
 	"\n" +
 	"\x18internal/conf/conf.proto\x12\n" +
-	"kratos.api\"}\n" +
+	"kratos.api\"\xac\x01\n" +
 	"\tBootstrap\x12*\n" +
 	"\x06server\x18\x01 \x01(\v2\x12.kratos.api.ServerR\x06server\x12$\n" +
 	"\x04data\x18\x02 \x01(\v2\x10.kratos.api.DataR\x04data\x12\x1e\n" +
-	"\x02ai\x18\x03 \x01(\v2\x0e.kratos.api.AIR\x02ai\"\x87\x01\n" +
+	"\x02ai\x18\x03 \x01(\v2\x0e.kratos.api.AIR\x02ai\x12-\n" +
+	"\aruntime\x18\x04 \x01(\v2\x13.kratos.api.RuntimeR\aruntime\"\x87\x01\n" +
 	"\x02AI\x12-\n" +
 	"\x06openai\x18\x01 \x01(\v2\x15.kratos.api.AI.OpenAIR\x06openai\x1aR\n" +
 	"\x06OpenAI\x12\x17\n" +
@@ -484,7 +597,13 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\bdatabase\x18\x01 \x01(\v2\x19.kratos.api.Data.DatabaseR\bdatabase\x1a:\n" +
 	"\bDatabase\x12\x16\n" +
 	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x16\n" +
-	"\x06source\x18\x02 \x01(\tR\x06sourceB Z\x1ekratos-demo/internal/conf;confb\x06proto3"
+	"\x06source\x18\x02 \x01(\tR\x06source\"\x9b\x01\n" +
+	"\aRuntime\x129\n" +
+	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x1aU\n" +
+	"\vRemoteAgent\x12\x14\n" +
+	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x16\n" +
+	"\x06target\x18\x02 \x01(\tR\x06target\x12\x18\n" +
+	"\atimeout\x18\x03 \x01(\x03R\atimeoutB Z\x1ekratos-demo/internal/conf;confb\x06proto3"
 
 var (
 	file_internal_conf_conf_proto_rawDescOnce sync.Once
@@ -498,30 +617,34 @@ func file_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_internal_conf_conf_proto_rawDescData
 }
 
-var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 8)
+var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 10)
 var file_internal_conf_conf_proto_goTypes = []any{
-	(*Bootstrap)(nil),     // 0: kratos.api.Bootstrap
-	(*AI)(nil),            // 1: kratos.api.AI
-	(*Server)(nil),        // 2: kratos.api.Server
-	(*Data)(nil),          // 3: kratos.api.Data
-	(*AI_OpenAI)(nil),     // 4: kratos.api.AI.OpenAI
-	(*Server_HTTP)(nil),   // 5: kratos.api.Server.HTTP
-	(*Server_GRPC)(nil),   // 6: kratos.api.Server.GRPC
-	(*Data_Database)(nil), // 7: kratos.api.Data.Database
+	(*Bootstrap)(nil),           // 0: kratos.api.Bootstrap
+	(*AI)(nil),                  // 1: kratos.api.AI
+	(*Server)(nil),              // 2: kratos.api.Server
+	(*Data)(nil),                // 3: kratos.api.Data
+	(*Runtime)(nil),             // 4: kratos.api.Runtime
+	(*AI_OpenAI)(nil),           // 5: kratos.api.AI.OpenAI
+	(*Server_HTTP)(nil),         // 6: kratos.api.Server.HTTP
+	(*Server_GRPC)(nil),         // 7: kratos.api.Server.GRPC
+	(*Data_Database)(nil),       // 8: kratos.api.Data.Database
+	(*Runtime_RemoteAgent)(nil), // 9: kratos.api.Runtime.RemoteAgent
 }
 var file_internal_conf_conf_proto_depIdxs = []int32{
 	2, // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
 	3, // 1: kratos.api.Bootstrap.data:type_name -> kratos.api.Data
 	1, // 2: kratos.api.Bootstrap.ai:type_name -> kratos.api.AI
-	4, // 3: kratos.api.AI.openai:type_name -> kratos.api.AI.OpenAI
-	5, // 4: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
-	6, // 5: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
-	7, // 6: kratos.api.Data.database:type_name -> kratos.api.Data.Database
-	7, // [7:7] is the sub-list for method output_type
-	7, // [7:7] is the sub-list for method input_type
-	7, // [7:7] is the sub-list for extension type_name
-	7, // [7:7] is the sub-list for extension extendee
-	0, // [0:7] is the sub-list for field type_name
+	4, // 3: kratos.api.Bootstrap.runtime:type_name -> kratos.api.Runtime
+	5, // 4: kratos.api.AI.openai:type_name -> kratos.api.AI.OpenAI
+	6, // 5: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
+	7, // 6: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
+	8, // 7: kratos.api.Data.database:type_name -> kratos.api.Data.Database
+	9, // 8: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
+	9, // [9:9] is the sub-list for method output_type
+	9, // [9:9] is the sub-list for method input_type
+	9, // [9:9] is the sub-list for extension type_name
+	9, // [9:9] is the sub-list for extension extendee
+	0, // [0:9] is the sub-list for field type_name
 }
 
 func init() { file_internal_conf_conf_proto_init() }
@@ -535,7 +658,7 @@ func file_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_conf_conf_proto_rawDesc), len(file_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   8,
+			NumMessages:   10,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

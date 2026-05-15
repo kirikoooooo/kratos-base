@@ -18,13 +18,14 @@ import (
 
 // Injectors from wire.go:
 
-func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, logger log.Logger) (*kratos.App, func(), error) {
+func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, runtimeConf *conf.Runtime, logger log.Logger) (*kratos.App, func(), error) {
 	taskRepo := data.NewTaskRepo(logger)
-	agentRuntime := data.NewAgentRuntime(aiConf, logger)
+	agentRuntime := data.NewAgentRuntime(aiConf, runtimeConf, logger)
 	taskDispatcher := data.NewTaskDispatcher(taskRepo, agentRuntime, logger)
 	taskUsecase := biz.NewTaskUsecase(taskRepo, taskDispatcher)
 	taskService := service.NewTaskService(taskUsecase)
-	grpcServer := server.NewGRPCServer(serverConf, taskService, logger)
+	agentRuntimeService := service.NewAgentRuntimeService(agentRuntime)
+	grpcServer := server.NewGRPCServer(serverConf, taskService, agentRuntimeService, logger)
 	httpServer := server.NewHTTPServer(serverConf, taskService, logger)
 	app := newApp(logger, grpcServer, httpServer)
 	return app, func() {

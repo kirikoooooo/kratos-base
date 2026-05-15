@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
@@ -15,24 +16,29 @@ import (
 	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/llms/openai"
 	"github.com/tmc/langchaingo/tools"
+	grpcclient "google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
-	defaultOpenAIModel = "gpt-4o-mini"
-	runtimeActorPID    = 9001
+	defaultOpenAIModel   = "gpt-4o-mini"
+	defaultRemoteTimeout = 8 * time.Second
+	runtimeActorPID      = 9001
 )
 
 type langChainAgentRuntime struct {
-	config *conf.AI
-	log    *log.Helper
-	pid    actorpkg.PID
+	config        *conf.AI
+	runtimeConfig *conf.Runtime
+	log           *log.Helper
+	pid           actorpkg.PID
 }
 
-func NewAgentRuntime(config *conf.AI, logger log.Logger) biz.AgentRuntime {
+func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, logger log.Logger) biz.AgentRuntime {
 	return &langChainAgentRuntime{
-		config: config,
-		log:    log.NewHelper(logger),
-		pid:    actorpkg.NewPID(runtimeActorPID, "langchain-runtime"),
+		config:        config,
+		runtimeConfig: runtimeConfig,
+		log:           log.NewHelper(logger),
+		pid:           actorpkg.NewPID(runtimeActorPID, "langchain-runtime"),
 	}
 }
 
@@ -165,19 +171,19 @@ func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*
 	}
 
 	agentTools := []tools.Tool{
-		newLocalAgentTool("coder_agent", "适合处理编码、实现、原型设计、接口定义等任务。输入应为要交给 coder 的具体任务描述。", func(input string) string {
-			return strings.Join([]string{
-				"CoderAgent 已准备开始处理任务。",
-				"CoderAgent 已收到任务：" + input,
-				"建议输出最小可运行版本，优先保证主链路可验证，再补充扩展能力。",
-			}, "\n")
+		newLocalAgentTool("coder_agent", "适合处理编码、实现、原型设计、接口定义等任务。输入应为要交给 coder 的具体任务描述。", func(toolCtx context.Context, input string) (string, error) {
+			result, err := r.dispatchSubTask(toolCtx, biz.TaskAgentCoder, input)
+			if err != nil {
+				return "", err
+			}
+			return formatTaskResult("CoderAgent", result), nil
 		}),
-		newLocalAgentTool("reviewer_agent", "适合处理代码审查、设计评审、风险识别、边界条件检查等任务。输入应为待审查内容或审查目标。", func(input string) string {
-			return strings.Join([]string{
-				"ReviewerAgent 已准备开始审查任务。",
-				"ReviewerAgent 已收到审查任务：" + input,
-				"建议重点检查错误处理、模块边界、可扩展性与后续演进风险。",
-			}, "\n")
+		newLocalAgentTool("reviewer_agent", "适合处理代码审查、设计评审、风险识别、边界条件检查等任务。输入应为待审查内容或审查目标。", func(toolCtx context.Context, input string) (string, error) {
+			result, err := r.dispatchSubTask(toolCtx, biz.TaskAgentReviewer, input)
+			if err != nil {
+				return "", err
+			}
+			return formatTaskResult("ReviewerAgent", result), nil
 		}),
 	}
 
@@ -235,13 +241,97 @@ func (r *langChainAgentRuntime) runReviewer(prompt string) *taskv1.TaskResult {
 	}
 }
 
+func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.TaskAgent, prompt string) (*taskv1.TaskResult, error) {
+	cmd := &taskv1.TaskCommand{
+		Agent:  agent.String(),
+		Prompt: strings.TrimSpace(prompt),
+	}
+	if cmd.Prompt == "" {
+		return nil, errors.New("sub task prompt is empty")
+	}
+
+	if remote := r.lookupRemoteAgent(agent); remote != nil && strings.TrimSpace(remote.GetTarget()) != "" {
+		r.log.Infof("router delegating sub task to remote agent=%s target=%s", agent, remote.GetTarget())
+		return r.executeRemoteTask(ctx, remote, cmd)
+	}
+
+	return r.ReceiveTask(ctx, cmd)
+}
+
+func (r *langChainAgentRuntime) lookupRemoteAgent(agent biz.TaskAgent) *conf.Runtime_RemoteAgent {
+	if r == nil || r.runtimeConfig == nil {
+		return nil
+	}
+	for _, remote := range r.runtimeConfig.GetRemotes() {
+		if remote == nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(remote.GetAgent()), agent.String()) {
+			return remote
+		}
+	}
+	return nil
+}
+
+func (r *langChainAgentRuntime) executeRemoteTask(ctx context.Context, remote *conf.Runtime_RemoteAgent, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
+	if remote == nil {
+		return nil, errors.New("remote agent config is nil")
+	}
+	target := strings.TrimSpace(remote.GetTarget())
+	if target == "" {
+		return nil, errors.New("remote agent target is empty")
+	}
+	timeout := defaultRemoteTimeout
+	if remote.GetTimeout() > 0 {
+		timeout = time.Duration(remote.GetTimeout()) * time.Second
+	}
+
+	dialCtx, dialCancel := context.WithTimeout(ctx, timeout)
+	defer dialCancel()
+
+	conn, err := grpcclient.DialContext(dialCtx, target,
+		grpcclient.WithTransportCredentials(insecure.NewCredentials()),
+		grpcclient.WithBlock(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("dial remote agent %s failed: %w", target, err)
+	}
+	defer conn.Close()
+
+	callCtx, callCancel := context.WithTimeout(ctx, timeout)
+	defer callCancel()
+
+	client := taskv1.NewAgentRuntimeServiceClient(conn)
+	result, err := client.ExecuteTask(callCtx, cmd)
+	if err != nil {
+		return nil, fmt.Errorf("remote execute task failed: %w", err)
+	}
+	return result, nil
+}
+
+func formatTaskResult(agentName string, result *taskv1.TaskResult) string {
+	if result == nil {
+		return agentName + " 未返回结果。"
+	}
+
+	parts := make([]string, 0, 3)
+	parts = append(parts, agentName+" 已完成子任务。")
+	if summary := strings.TrimSpace(result.GetSummary()); summary != "" {
+		parts = append(parts, "总结："+summary)
+	}
+	if output := strings.TrimSpace(result.GetOutput()); output != "" {
+		parts = append(parts, "输出：\n"+output)
+	}
+	return strings.Join(parts, "\n")
+}
+
 type localAgentTool struct {
 	name        string
 	description string
-	run         func(input string) string
+	run         func(ctx context.Context, input string) (string, error)
 }
 
-func newLocalAgentTool(name, description string, run func(input string) string) tools.Tool {
+func newLocalAgentTool(name, description string, run func(ctx context.Context, input string) (string, error)) tools.Tool {
 	return &localAgentTool{
 		name:        name,
 		description: description,
@@ -257,6 +347,6 @@ func (t *localAgentTool) Description() string {
 	return t.description
 }
 
-func (t *localAgentTool) Call(_ context.Context, input string) (string, error) {
-	return t.run(strings.TrimSpace(input)), nil
+func (t *localAgentTool) Call(ctx context.Context, input string) (string, error) {
+	return t.run(ctx, strings.TrimSpace(input))
 }

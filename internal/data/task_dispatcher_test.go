@@ -3,20 +3,23 @@ package data
 import (
 	"context"
 	"io"
+	"net"
 	"testing"
 	"time"
 
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
+	"kratos-demo/internal/service"
 	actorpkg "kratos-demo/third_party/actor"
 
 	"github.com/go-kratos/kratos/v2/log"
+	grpcserver "google.golang.org/grpc"
 )
 
 func TestAgentRuntimeSendTaskViaActor(t *testing.T) {
 	logger := log.NewStdLogger(io.Discard)
-	runtime := NewAgentRuntime(&conf.AI{}, logger)
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, logger)
 	defer actorpkg.StopActor(runtime.PID())
 
 	_ = NewTaskDispatcher(NewTaskRepo(logger), runtime, logger)
@@ -41,7 +44,7 @@ func TestAgentRuntimeSendTaskViaActor(t *testing.T) {
 func TestTaskDispatcherDispatchViaActor(t *testing.T) {
 	logger := log.NewStdLogger(io.Discard)
 	repo := NewTaskRepo(logger)
-	runtime := NewAgentRuntime(&conf.AI{}, logger)
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, logger)
 	defer actorpkg.StopActor(runtime.PID())
 
 	dispatcher := NewTaskDispatcher(repo, runtime, logger)
@@ -84,4 +87,60 @@ func TestTaskDispatcherDispatchViaActor(t *testing.T) {
 	}
 
 	t.Fatal("timeout waiting for actor-dispatched task to complete")
+}
+
+func TestDispatchSubTaskViaRemoteGRPC(t *testing.T) {
+	logger := log.NewStdLogger(io.Discard)
+	remoteRuntime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, logger)
+	remoteService := service.NewAgentRuntimeService(remoteRuntime)
+
+	grpcSrv := grpcserver.NewServer()
+	taskv1.RegisterAgentRuntimeServiceServer(grpcSrv, remoteService)
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen grpc server failed: %v", err)
+	}
+	defer listener.Close()
+
+	serveDone := make(chan error, 1)
+	go func() {
+		serveDone <- grpcSrv.Serve(listener)
+	}()
+	defer func() {
+		grpcSrv.Stop()
+		select {
+		case err := <-serveDone:
+			if err != nil {
+				t.Fatalf("grpc server stopped with error: %v", err)
+			}
+		case <-time.After(time.Second):
+			t.Fatal("timeout waiting grpc server to stop")
+		}
+	}()
+
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{
+		Remotes: []*conf.Runtime_RemoteAgent{{
+			Agent:   biz.TaskAgentCoder.String(),
+			Target:  listener.Addr().String(),
+			Timeout: 3,
+		}},
+	}, logger)
+
+	result, err := runtime.(*langChainAgentRuntime).dispatchSubTask(context.Background(), biz.TaskAgentCoder, "远程实现一个最小接口")
+	if err != nil {
+		t.Fatalf("dispatch remote grpc sub task failed: %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil remote task result")
+	}
+	if result.GetSummary() == "" {
+		t.Fatal("expected non-empty remote task result summary")
+	}
+	if result.GetOutput() == "" {
+		t.Fatal("expected non-empty remote task result output")
+	}
+	if result.GetSummary() != "coder agent 已生成初始方案" {
+		t.Fatalf("unexpected remote task summary: %s", result.GetSummary())
+	}
 }

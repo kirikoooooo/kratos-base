@@ -16,3 +16,8 @@ ai:
     api_key: "sk-9LAwFafTcQgGzTmo01XVzYk7LmVBj5Ba8zb85twR88TsyKRO"
     base_url: "https://api.openai-proxy.org/v1"
     model: gpt-5.4-mini
+runtime:
+  remotes:
+    - agent: coder
+      target: 127.0.0.1:9001
+      timeout: 8

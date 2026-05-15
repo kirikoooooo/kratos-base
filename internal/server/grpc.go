@@ -13,7 +13,7 @@ import (
 	grpctransport "github.com/go-kratos/kratos/v2/transport/grpc"
 )
 
-func NewGRPCServer(c *conf.Server, ts *service.TaskService, logger log.Logger) *grpctransport.Server {
+func NewGRPCServer(c *conf.Server, ts *service.TaskService, ars *service.AgentRuntimeService, logger log.Logger) *grpctransport.Server {
 	timeout := time.Duration(c.GetGrpc().GetTimeout()) * time.Second
 	srv := grpctransport.NewServer(
 		grpctransport.Network(c.GetGrpc().GetNetwork()),
@@ -25,5 +25,6 @@ func NewGRPCServer(c *conf.Server, ts *service.TaskService, logger log.Logger) *
 		),
 	)
 	taskv1.RegisterTaskServiceServer(srv, ts)
+	taskv1.RegisterAgentRuntimeServiceServer(srv, ars)
 	return srv
 }

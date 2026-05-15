@@ -22,6 +22,10 @@ service TaskService {
   }
 }
 
+service AgentRuntimeService {
+  rpc ExecuteTask (TaskCommand) returns (TaskResult);
+}
+
 message TaskCommand {
   string taskID = 1;
   string agent = 2;
