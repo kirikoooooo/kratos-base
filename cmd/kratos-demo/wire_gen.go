@@ -20,13 +20,15 @@ import (
 
 func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, runtimeConf *conf.Runtime, logger log.Logger) (*kratos.App, func(), error) {
 	taskRepo := data.NewTaskRepo(logger)
-	agentRuntime := data.NewAgentRuntime(aiConf, runtimeConf, logger)
-	taskDispatcher := data.NewTaskDispatcher(taskRepo, agentRuntime, logger)
+	delegationTraceStore := data.NewDelegationTraceStore()
+	agentRuntime := data.NewAgentRuntime(aiConf, runtimeConf, delegationTraceStore, logger)
+	taskDispatcher := data.NewTaskDispatcher(taskRepo, agentRuntime, delegationTraceStore, logger)
 	taskUsecase := biz.NewTaskUsecase(taskRepo, taskDispatcher)
 	taskService := service.NewTaskService(taskUsecase)
+	dashboardService := service.NewDashboardService(delegationTraceStore, agentRuntime, runtimeConf)
 	agentRuntimeService := service.NewAgentRuntimeService(agentRuntime)
 	grpcServer := server.NewGRPCServer(serverConf, taskService, agentRuntimeService, logger)
-	httpServer := server.NewHTTPServer(serverConf, taskService, logger)
+	httpServer := server.NewHTTPServer(serverConf, taskService, dashboardService, logger)
 	app := newApp(logger, grpcServer, httpServer)
 	return app, func() {
 	}, nil

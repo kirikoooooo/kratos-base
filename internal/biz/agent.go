@@ -25,6 +25,10 @@ type AgentRuntime interface {
 	SendTask(context.Context, *taskv1.TaskCommand) (*taskv1.TaskResult, error)
 }
 
+type DelegationVerifier interface {
+	VerifyDelegation(context.Context, string, TaskAgent, string) (*taskv1.TaskResult, error)
+}
+
 type AgentRuntimeUsecase struct {
 	ar AgentRuntime
 }

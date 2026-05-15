@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -14,15 +15,48 @@ import (
 	actorpkg "kratos-demo/third_party/actor"
 
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/tmc/langchaingo/llms"
 	grpcserver "google.golang.org/grpc"
 )
 
+type fakeLLM struct{}
+
+func (fakeLLM) GenerateContent(_ context.Context, messages []llms.MessageContent, _ ...llms.CallOption) (*llms.ContentResponse, error) {
+	parts := make([]string, 0, len(messages))
+	for _, msg := range messages {
+		for _, part := range msg.Parts {
+			if text, ok := part.(llms.TextContent); ok {
+				parts = append(parts, text.Text)
+			}
+		}
+	}
+	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: strings.Join(parts, "\n")}}}, nil
+}
+
+func (fakeLLM) Call(_ context.Context, prompt string, _ ...llms.CallOption) (string, error) {
+	return prompt, nil
+}
+
+func withFakeRuntimeLLM(t *testing.T) {
+	t.Helper()
+	prev := newRuntimeLLM
+	newRuntimeLLM = func(_ *conf.AI, _ *log.Helper) (llms.Model, error) {
+		return fakeLLM{}, nil
+	}
+	t.Cleanup(func() {
+		newRuntimeLLM = prev
+	})
+}
+
 func TestAgentRuntimeSendTaskViaActor(t *testing.T) {
+	withFakeRuntimeLLM(t)
+
 	logger := log.NewStdLogger(io.Discard)
-	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, logger)
+	trace := NewDelegationTraceStore()
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, logger)
 	defer actorpkg.StopActor(runtime.PID())
 
-	_ = NewTaskDispatcher(NewTaskRepo(logger), runtime, logger)
+	_ = NewTaskDispatcher(NewTaskRepo(logger), runtime, trace, logger)
 
 	result, err := runtime.SendTask(context.Background(), &taskv1.TaskCommand{
 		TaskID: "task-sync",
@@ -42,12 +76,15 @@ func TestAgentRuntimeSendTaskViaActor(t *testing.T) {
 }
 
 func TestTaskDispatcherDispatchViaActor(t *testing.T) {
+	withFakeRuntimeLLM(t)
+
 	logger := log.NewStdLogger(io.Discard)
 	repo := NewTaskRepo(logger)
-	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, logger)
+	trace := NewDelegationTraceStore()
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, logger)
 	defer actorpkg.StopActor(runtime.PID())
 
-	dispatcher := NewTaskDispatcher(repo, runtime, logger)
+	dispatcher := NewTaskDispatcher(repo, runtime, trace, logger)
 
 	task := &biz.Task{
 		ID:        "task-dispatch",
@@ -90,8 +127,11 @@ func TestTaskDispatcherDispatchViaActor(t *testing.T) {
 }
 
 func TestDispatchSubTaskViaRemoteGRPC(t *testing.T) {
+	withFakeRuntimeLLM(t)
+
 	logger := log.NewStdLogger(io.Discard)
-	remoteRuntime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, logger)
+	trace := NewDelegationTraceStore()
+	remoteRuntime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, logger)
 	remoteService := service.NewAgentRuntimeService(remoteRuntime)
 
 	grpcSrv := grpcserver.NewServer()
@@ -125,7 +165,7 @@ func TestDispatchSubTaskViaRemoteGRPC(t *testing.T) {
 			Target:  listener.Addr().String(),
 			Timeout: 3,
 		}},
-	}, logger)
+	}, trace, logger)
 
 	result, err := runtime.(*langChainAgentRuntime).dispatchSubTask(context.Background(), biz.TaskAgentCoder, "远程实现一个最小接口")
 	if err != nil {
@@ -140,7 +180,7 @@ func TestDispatchSubTaskViaRemoteGRPC(t *testing.T) {
 	if result.GetOutput() == "" {
 		t.Fatal("expected non-empty remote task result output")
 	}
-	if result.GetSummary() != "coder agent 已生成初始方案" {
+	if result.GetSummary() != "coder agent 已通过 LangChainGo function calling 完成生成" {
 		t.Fatalf("unexpected remote task summary: %s", result.GetSummary())
 	}
 }

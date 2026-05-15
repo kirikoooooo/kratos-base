@@ -10,7 +10,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var ProviderSet = wire.NewSet(NewTaskService, NewAgentRuntimeService)
+var ProviderSet = wire.NewSet(NewTaskService, NewAgentRuntimeService, NewDashboardService)
 
 type TaskService struct {
 	taskv1.UnimplementedTaskServiceServer

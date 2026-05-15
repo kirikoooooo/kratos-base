@@ -16,7 +16,7 @@ import (
 
 var ProviderSet = wire.NewSet(NewHTTPServer, NewGRPCServer)
 
-func NewHTTPServer(c *conf.Server, ts *service.TaskService, logger log.Logger) *httptransport.Server {
+func NewHTTPServer(c *conf.Server, ts *service.TaskService, ds *service.DashboardService, logger log.Logger) *httptransport.Server {
 	timeout := time.Duration(c.GetHttp().GetTimeout()) * time.Second
 	srv := httptransport.NewServer(
 		httptransport.Network(c.GetHttp().GetNetwork()),
@@ -28,5 +28,8 @@ func NewHTTPServer(c *conf.Server, ts *service.TaskService, logger log.Logger) *
 		),
 	)
 	taskv1.RegisterTaskServiceHTTPServer(srv, ts)
+	if ds != nil {
+		ds.Register(srv)
+	}
 	return srv
 }

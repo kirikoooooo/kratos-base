@@ -17,10 +17,11 @@ const runtimeMailboxSize = 128
 type taskDispatcher struct {
 	repo    biz.TaskRepo
 	runtime biz.AgentRuntime
+	trace   biz.DelegationTraceStore
 	log     *log.Helper
 }
 
-func NewTaskDispatcher(repo biz.TaskRepo, runtime biz.AgentRuntime, logger log.Logger) biz.TaskDispatcher {
+func NewTaskDispatcher(repo biz.TaskRepo, runtime biz.AgentRuntime, trace biz.DelegationTraceStore, logger log.Logger) biz.TaskDispatcher {
 	if runtime != nil {
 		actorpkg.StopActor(runtime.PID())
 		if err := actorpkg.RegisterActor(runtime, runtimeMailboxSize); err != nil {
@@ -31,6 +32,7 @@ func NewTaskDispatcher(repo biz.TaskRepo, runtime biz.AgentRuntime, logger log.L
 	return &taskDispatcher{
 		repo:    repo,
 		runtime: runtime,
+		trace:   trace,
 		log:     log.NewHelper(logger),
 	}
 }
@@ -66,6 +68,16 @@ func (d *taskDispatcher) handle(ctx context.Context, cmd *taskv1.TaskCommand) {
 		d.log.Errorf("update task running failed: id=%s err=%v", cmd.TaskID, err)
 		return
 	}
+	if d.trace != nil {
+		d.trace.StartTask(task.ID, task.Agent, task.Prompt, task.Status)
+		d.trace.AppendEvent(biz.DelegationEvent{
+			Time:          time.Now(),
+			TaskID:        task.ID,
+			Agent:         task.Agent.String(),
+			Stage:         "task_running",
+			PromptPreview: previewPrompt(task.Prompt),
+		})
+	}
 
 	result, execErr := d.runtime.SendTask(ctx, cmd)
 	updated, err := d.repo.Get(ctx, cmd.TaskID)
@@ -79,11 +91,33 @@ func (d *taskDispatcher) handle(ctx context.Context, cmd *taskv1.TaskCommand) {
 		if err := d.repo.Update(ctx, updated); err != nil {
 			d.log.Errorf("update task failed status failed: id=%s err=%v", cmd.TaskID, err)
 		}
+		if d.trace != nil {
+			d.trace.AppendEvent(biz.DelegationEvent{
+				Time:    time.Now(),
+				TaskID:  updated.ID,
+				Agent:   updated.Agent.String(),
+				Stage:   "task_failed",
+				Error:   execErr.Error(),
+				Summary: "task execution failed",
+			})
+			d.trace.UpdateTask(updated.ID, updated.Status, nil, execErr)
+		}
 		return
 	}
 
 	updated.MarkDone(result, time.Now())
 	if err := d.repo.Update(ctx, updated); err != nil {
 		d.log.Errorf("update task done failed: id=%s err=%v", cmd.TaskID, err)
+	}
+	if d.trace != nil {
+		d.trace.AppendEvent(biz.DelegationEvent{
+			Time:       time.Now(),
+			TaskID:     updated.ID,
+			Agent:      updated.Agent.String(),
+			Stage:      "task_done",
+			Summary:    result.GetSummary(),
+			DurationMS: updated.UpdatedAt.Sub(task.CreatedAt).Milliseconds(),
+		})
+		d.trace.UpdateTask(updated.ID, updated.Status, result, nil)
 	}
 }

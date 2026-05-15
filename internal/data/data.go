@@ -7,8 +7,7 @@ import (
 	"github.com/google/wire"
 )
 
-// 如果需要切换只需要修改这里传入具体实例的构造函数
-var ProviderSet = wire.NewSet(NewData, NewTaskRepo, NewAgentRuntime, NewTaskDispatcher)
+var ProviderSet = wire.NewSet(NewData, NewTaskRepo, NewDelegationTraceStore, NewAgentRuntime, NewTaskDispatcher)
 
 type Data struct {
 	db  *conf.Data_Database
