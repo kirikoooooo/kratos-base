@@ -3,7 +3,6 @@ package server
 import (
 	"time"
 
-	v1 "kratos-demo/api/helloworld/v1"
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/service"
 
@@ -16,7 +15,7 @@ import (
 
 var ProviderSet = wire.NewSet(NewHTTPServer, NewGRPCServer)
 
-func NewHTTPServer(c *conf.Server, gs *service.GreeterService, logger log.Logger) *httptransport.Server {
+func NewHTTPServer(c *conf.Server, ts *service.TaskService, logger log.Logger) *httptransport.Server {
 	timeout := time.Duration(c.GetHttp().GetTimeout()) * time.Second
 	srv := httptransport.NewServer(
 		httptransport.Network(c.GetHttp().GetNetwork()),
@@ -27,6 +26,6 @@ func NewHTTPServer(c *conf.Server, gs *service.GreeterService, logger log.Logger
 			recovery.Recovery(),
 		),
 	)
-	v1.RegisterGreeterHTTPServer(srv, gs)
+	registerTaskHTTPServer(srv, ts)
 	return srv
 }

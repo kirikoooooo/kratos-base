@@ -12,8 +12,8 @@ import (
 )
 
 var (
-	Name    = "kratos-demo"
-	Version = "0.1.0"
+	Name     = "kratos-demo"
+	Version  = "0.1.0"
 	flagconf string
 )
 
@@ -47,7 +47,7 @@ func main() {
 		panic(err)
 	}
 
-	app, cleanup, err := wireApp(bc.GetServer(), bc.GetData(), logger)
+	app, cleanup, err := wireApp(bc.GetServer(), bc.GetData(), bc.GetAi(), logger)
 	if err != nil {
 		panic(err)
 	}

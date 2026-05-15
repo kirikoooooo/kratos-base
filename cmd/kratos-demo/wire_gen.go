@@ -7,31 +7,31 @@
 package main
 
 import (
-	"github.com/go-kratos/kratos/v2"
-	"github.com/go-kratos/kratos/v2/log"
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/data"
 	"kratos-demo/internal/server"
 	"kratos-demo/internal/service"
+
+	"github.com/go-kratos/kratos/v2"
+	"github.com/go-kratos/kratos/v2/log"
 )
 
 // Injectors from wire.go:
 
-func wireApp(serverConf *conf.Server, dataConf *conf.Data, logger log.Logger) (*kratos.App, func(), error) {
-	dataData, cleanup, err := data.NewData(dataConf, logger)
+func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, logger log.Logger) (*kratos.App, func(), error) {
+	_, cleanup, err := data.NewData(dataConf, logger)
 	if err != nil {
 		return nil, nil, err
 	}
-	greeterRepo := data.NewGreeterRepo(dataData, logger)
-	greeterUsecase := biz.NewGreeterUsecase(greeterRepo, logger)
-	greeterService := service.NewGreeterService(greeterUsecase)
-	grpcServer := server.NewGRPCServer(serverConf, greeterService, logger)
-	httpServer := server.NewHTTPServer(serverConf, greeterService, logger)
-	orderRepo := data.NewOrderRepo(dataData, logger)
-	orderUsecase := biz.NewOrderUsecase(orderRepo, logger)
-	pricingUsecase := biz.NewPricingUsecase(logger)
-	app := newApp(logger, grpcServer, httpServer, orderUsecase, pricingUsecase)
+	agentRuntime := data.NewAgentRuntime(aiConf, logger)
+	taskRepo := data.NewTaskRepo(logger)
+	taskDispatcher := data.NewTaskDispatcher(taskRepo, agentRuntime, logger)
+	taskUsecase := biz.NewTaskUsecase(taskRepo, taskDispatcher)
+	taskService := service.NewTaskService(taskUsecase)
+	grpcServer := server.NewGRPCServer(serverConf, logger)
+	httpServer := server.NewHTTPServer(serverConf, taskService, logger)
+	app := newApp(logger, grpcServer, httpServer)
 	return app, func() {
 		cleanup()
 	}, nil
