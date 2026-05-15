@@ -3,7 +3,9 @@ package server
 import (
 	"time"
 
+	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/conf"
+	"kratos-demo/internal/service"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/go-kratos/kratos/v2/middleware/logging"
@@ -11,7 +13,7 @@ import (
 	grpctransport "github.com/go-kratos/kratos/v2/transport/grpc"
 )
 
-func NewGRPCServer(c *conf.Server, logger log.Logger) *grpctransport.Server {
+func NewGRPCServer(c *conf.Server, ts *service.TaskService, logger log.Logger) *grpctransport.Server {
 	timeout := time.Duration(c.GetGrpc().GetTimeout()) * time.Second
 	srv := grpctransport.NewServer(
 		grpctransport.Network(c.GetGrpc().GetNetwork()),
@@ -22,5 +24,6 @@ func NewGRPCServer(c *conf.Server, logger log.Logger) *grpctransport.Server {
 			recovery.Recovery(),
 		),
 	)
+	taskv1.RegisterTaskServiceServer(srv, ts)
 	return srv
 }

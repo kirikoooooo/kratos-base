@@ -1,0 +1,54 @@
+syntax = "proto3";
+
+package api.task.v1;
+
+option go_package = "kratos-demo/api/task/v1;v1";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+service TaskService {
+  rpc CreateTask (CreateTaskRequest) returns (TaskReply) {
+    option (google.api.http) = {
+      post: "/api/v1/tasks"
+      body: "*"
+    };
+  }
+
+  rpc GetTask (GetTaskRequest) returns (TaskReply) {
+    option (google.api.http) = {
+      get: "/api/v1/tasks/{taskID}"
+    };
+  }
+}
+
+message TaskCommand {
+  string taskID = 1;
+  string agent = 2;
+  string prompt = 3;
+}
+
+message TaskResult {
+  string summary = 1;
+  string output = 2;
+}
+
+message CreateTaskRequest {
+  string agent = 1;
+  string prompt = 2;
+}
+
+message GetTaskRequest {
+  string taskID = 1;
+}
+
+message TaskReply {
+  string taskID = 1;
+  string agent = 2;
+  string prompt = 3;
+  string status = 4;
+  TaskResult result = 5;
+  string error = 6;
+  google.protobuf.Timestamp createdAt = 7;
+  google.protobuf.Timestamp updatedAt = 8;
+}

@@ -7,6 +7,8 @@ import (
 	"strings"
 	"sync/atomic"
 	"time"
+
+	taskv1 "kratos-demo/api/task/v1"
 )
 
 var (
@@ -30,26 +32,15 @@ const (
 	TaskAgentReviewer TaskAgent = "reviewer"
 )
 
-type TaskResult struct {
-	Summary string `json:"summary"`
-	Output  string `json:"output"`
-}
-
 type Task struct {
-	ID        string      `json:"task_id"`
-	Agent     TaskAgent   `json:"agent"`
-	Prompt    string      `json:"prompt"`
-	Status    TaskStatus  `json:"status"`
-	Result    *TaskResult `json:"result,omitempty"`
-	Error     string      `json:"error,omitempty"`
-	CreatedAt time.Time   `json:"created_at"`
-	UpdatedAt time.Time   `json:"updated_at"`
-}
-
-type TaskCommand struct {
-	TaskID string
-	Agent  TaskAgent
-	Prompt string
+	ID        string             `json:"task_id"`
+	Agent     TaskAgent          `json:"agent"`
+	Prompt    string             `json:"prompt"`
+	Status    TaskStatus         `json:"status"`
+	Result    *taskv1.TaskResult `json:"result,omitempty"`
+	Error     string             `json:"error,omitempty"`
+	CreatedAt time.Time          `json:"created_at"`
+	UpdatedAt time.Time          `json:"updated_at"`
 }
 
 type TaskRepo interface {
@@ -59,7 +50,7 @@ type TaskRepo interface {
 }
 
 type TaskDispatcher interface {
-	Dispatch(context.Context, *TaskCommand) error
+	Dispatch(context.Context, *taskv1.TaskCommand) error
 }
 
 type TaskUsecase struct {
@@ -129,13 +120,13 @@ func (a TaskAgent) IsEmpty() bool {
 	return strings.TrimSpace(a.String()) == ""
 }
 
-func (t *Task) ToCommand() *TaskCommand {
+func (t *Task) ToCommand() *taskv1.TaskCommand {
 	if t == nil {
 		return nil
 	}
-	return &TaskCommand{
+	return &taskv1.TaskCommand{
 		TaskID: t.ID,
-		Agent:  t.Agent,
+		Agent:  t.Agent.String(),
 		Prompt: t.Prompt,
 	}
 }
@@ -163,7 +154,7 @@ func (t *Task) MarkFailed(err error, at time.Time) {
 	t.Error = ""
 }
 
-func (t *Task) MarkDone(result *TaskResult, at time.Time) {
+func (t *Task) MarkDone(result *taskv1.TaskResult, at time.Time) {
 	if t == nil {
 		return
 	}

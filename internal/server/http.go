@@ -3,6 +3,7 @@ package server
 import (
 	"time"
 
+	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/service"
 
@@ -26,6 +27,6 @@ func NewHTTPServer(c *conf.Server, ts *service.TaskService, logger log.Logger) *
 			recovery.Recovery(),
 		),
 	)
-	registerTaskHTTPServer(srv, ts)
+	taskv1.RegisterTaskServiceHTTPServer(srv, ts)
 	return srv
 }

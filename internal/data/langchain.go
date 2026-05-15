@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
 	actorpkg "kratos-demo/third_party/actor"
@@ -44,13 +45,13 @@ func (r *langChainAgentRuntime) Process(msg *actorpkg.Message) {
 		return
 	}
 
-	cmd, ok := msg.Data.(*biz.TaskCommand)
+	cmd, ok := msg.Data.(*taskv1.TaskCommand)
 	if !ok || cmd == nil {
 		msg.Response(actorpkg.RespMessage{Err: errors.New("invalid runtime task command")})
 		return
 	}
 
-	result, err := r.Execute(context.Background(), cmd.Agent, cmd.Prompt)
+	result, err := r.ReceiveTask(context.Background(), cmd)
 	msg.Response(actorpkg.RespMessage{Err: err, Data: result})
 }
 
@@ -71,7 +72,7 @@ func (r *langChainAgentRuntime) Supports(agent biz.TaskAgent) bool {
 	}
 }
 
-func (r *langChainAgentRuntime) Execute(ctx context.Context, agent biz.TaskAgent, prompt string) (*biz.TaskResult, error) {
+func (r *langChainAgentRuntime) Execute(ctx context.Context, agent biz.TaskAgent, prompt string) (*taskv1.TaskResult, error) {
 	switch agent {
 	case biz.TaskAgentRouter:
 		return r.runRouter(ctx, prompt)
@@ -84,7 +85,59 @@ func (r *langChainAgentRuntime) Execute(ctx context.Context, agent biz.TaskAgent
 	}
 }
 
-func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*biz.TaskResult, error) {
+func (r *langChainAgentRuntime) ReceiveTask(ctx context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
+	if cmd == nil {
+		return nil, errors.New("task command is nil")
+	}
+	return r.Execute(ctx, biz.TaskAgent(cmd.Agent), cmd.Prompt)
+}
+
+func (r *langChainAgentRuntime) SendTask(_ context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
+	if r == nil {
+		return nil, errors.New("agent runtime is not available")
+	}
+	if cmd == nil {
+		return nil, errors.New("task command is nil")
+	}
+	resp := r.syncRequest(nil, &actorpkg.Message{
+		Id:   1001,
+		Data: cmd,
+	})
+	if resp.Err != nil {
+		return nil, resp.Err
+	}
+	result, _ := resp.Data.(*taskv1.TaskResult)
+	if result == nil {
+		return nil, errors.New("task result is nil")
+	}
+	return result, nil
+}
+
+func (r *langChainAgentRuntime) send(from actorpkg.PID, message *actorpkg.Message) error {
+	if r == nil {
+		return errors.New("agent runtime is not available")
+	}
+	return actorpkg.Send(from, r.PID(), message)
+}
+
+func (r *langChainAgentRuntime) syncRequest(from actorpkg.PID, message *actorpkg.Message) actorpkg.RespMessage {
+	if r == nil {
+		return actorpkg.RespMessage{Err: errors.New("agent runtime is not available")}
+	}
+	return actorpkg.SyncRequest(from, r.PID(), message)
+}
+
+func (r *langChainAgentRuntime) asyncRequest(from actorpkg.PID, message *actorpkg.Message, cb func(actorpkg.RespMessage)) {
+	if r == nil {
+		if cb != nil {
+			cb(actorpkg.RespMessage{Err: errors.New("agent runtime is not available")})
+		}
+		return
+	}
+	actorpkg.AsyncRequest(from, r.PID(), message, cb)
+}
+
+func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
 	apiKey := strings.TrimSpace(r.config.GetOpenai().GetApiKey())
 	if apiKey == "" {
 		err := errors.New("ai.openai.api_key is empty")
@@ -154,14 +207,14 @@ func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*
 		return nil, errors.New("react executor returned empty output")
 	}
 
-	return &biz.TaskResult{
+	return &taskv1.TaskResult{
 		Summary: "router agent 已通过 LangChainGo function calling 完成编排",
 		Output:  output,
 	}, nil
 }
 
-func (r *langChainAgentRuntime) runCoder(prompt string) *biz.TaskResult {
-	return &biz.TaskResult{
+func (r *langChainAgentRuntime) runCoder(prompt string) *taskv1.TaskResult {
+	return &taskv1.TaskResult{
 		Summary: "coder agent 已生成初始方案",
 		Output: strings.Join([]string{
 			"CoderAgent 已准备开始处理任务。",
@@ -171,8 +224,8 @@ func (r *langChainAgentRuntime) runCoder(prompt string) *biz.TaskResult {
 	}
 }
 
-func (r *langChainAgentRuntime) runReviewer(prompt string) *biz.TaskResult {
-	return &biz.TaskResult{
+func (r *langChainAgentRuntime) runReviewer(prompt string) *taskv1.TaskResult {
+	return &taskv1.TaskResult{
 		Summary: "reviewer agent 已完成审查",
 		Output: strings.Join([]string{
 			"ReviewerAgent 已准备开始审查任务。",
