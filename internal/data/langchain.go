@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/http"
 	"strings"
 	"time"
 
@@ -23,6 +25,7 @@ import (
 
 const (
 	defaultOpenAIModel      = "gpt-4o-mini"
+	defaultOpenAITimeout    = 120 * time.Second
 	defaultRemoteTimeout    = 8 * time.Second
 	runtimeActorPID         = 9001
 	maxToolLoopIterations   = 12
@@ -60,6 +63,7 @@ var newRuntimeLLMForPurpose = func(config *conf.AI, logger *log.Helper, purpose 
 	if baseURL := strings.TrimSpace(config.GetOpenai().GetBaseUrl()); baseURL != "" {
 		options = append(options, openai.WithBaseURL(baseURL))
 	}
+	options = append(options, openai.WithHTTPClient(newOpenAIHTTPClient(openAITimeoutFromConfig(config))))
 
 	modelClient, err := openai.New(options...)
 	if err != nil {
@@ -67,6 +71,45 @@ var newRuntimeLLMForPurpose = func(config *conf.AI, logger *log.Helper, purpose 
 		return nil, fmt.Errorf("create openai compatible llm failed: %w", err)
 	}
 	return modelClient, nil
+}
+
+func openAITimeoutFromConfig(config *conf.AI) time.Duration {
+	if config == nil || config.GetOpenai() == nil {
+		return defaultOpenAITimeout
+	}
+	if seconds := config.GetOpenai().GetTimeoutSeconds(); seconds > 0 {
+		return time.Duration(seconds) * time.Second
+	}
+	return defaultOpenAITimeout
+}
+
+func newOpenAIHTTPClient(timeout time.Duration) *http.Client {
+	if timeout <= 0 {
+		timeout = defaultOpenAITimeout
+	}
+	dialTimeout := 30 * time.Second
+	if timeout < dialTimeout {
+		dialTimeout = timeout
+	}
+	tlsTimeout := 30 * time.Second
+	if timeout < tlsTimeout {
+		tlsTimeout = timeout
+	}
+	return &http.Client{
+		Timeout: timeout,
+		Transport: &http.Transport{
+			Proxy: http.ProxyFromEnvironment,
+			DialContext: (&net.Dialer{
+				Timeout:   dialTimeout,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
+			TLSHandshakeTimeout:   tlsTimeout,
+			ResponseHeaderTimeout: timeout,
+			ExpectContinueTimeout: 1 * time.Second,
+			MaxIdleConns:          16,
+			IdleConnTimeout:       90 * time.Second,
+		},
+	}
 }
 
 type langChainAgentRuntime struct {
@@ -82,13 +125,13 @@ type langChainAgentRuntime struct {
 	toolCatalogErr error
 }
 
-func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace biz.DelegationTraceStore, memory *biz.AgentMemoryUsecase, logger log.Logger) biz.AgentRuntime {
+func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace biz.DelegationTraceStore, changes biz.SessionChangeStore, memory *biz.AgentMemoryUsecase, logger log.Logger) biz.AgentRuntime {
 	helper := log.NewHelper(logger)
 	catalog, err := toolcatalog.DefaultCatalog()
 	if err != nil {
 		helper.Warnf("load embedded tool catalog failed: %v", err)
 	}
-	localTools, localToolsErr := newLocalToolRuntime(trace)
+	localTools, localToolsErr := newLocalToolRuntime(trace, changes)
 	if localToolsErr != nil {
 		helper.Warnf("create local tool runtime failed: %v", localToolsErr)
 	}
@@ -270,7 +313,7 @@ func (r *langChainAgentRuntime) runDefault(ctx context.Context, prompt string) (
 	systemPrompt := strings.Join([]string{
 		"你是一个通用代码代理运行时，负责直接理解任务并给出可执行结果。",
 		"当任务涉及查看仓库、修改文件或执行本地验证时，优先调用可用函数，不要假设工具已经执行。",
-		"可用工具覆盖读文件、写文件和执行受限验证命令；拿到工具结果后，再用中文给出真实总结。",
+		"可用工具覆盖读文件、edit_file 增量编辑、write_file 新建文件和执行受限验证命令；拿到工具结果后，再用中文给出真实总结。",
 		"如果任务不需要工具，也可以直接回答，但不能编造执行结果。",
 	}, "\n")
 
@@ -389,7 +432,7 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 	if modelClient == nil {
 		return nil, errors.New("llm model is nil")
 	}
-	systemText := strings.TrimSpace(systemPrompt) + "\n如果 read_file 因路径不存在失败，先修正路径；必要时可调用 exec_command 在 Windows 工作区搜索文件位置，但 exec_command 全任务最多尝试 3 次。"
+	systemText := strings.TrimSpace(systemPrompt) + "\n修改已有文件必须先 read_file，再用 edit_file 原子操作：insert_line/insert_after_line/prepend/append 插入，delete_line/delete_lines/delete_string 删除，replace_line/replace_lines/search_replace 替换；行号从 1 开始；write_file 仅新建文件。\n分析目录结构时对目录调用 read_file（如 read_file internal/biz）会返回条目列表，再逐个 read_file 具体 .go 文件；不要依赖 exec_command 做目录搜索。\n若 read_file 因路径不存在失败，先尝试 read_file 父目录或修正相对路径；exec_command 全任务最多 3 次且失败后会禁用，优先 read_file。"
 	if r.memory != nil {
 		if block := strings.TrimSpace(r.memory.RenderPromptContext(ctx, currentTaskID(ctx))); block != "" {
 			systemText += "\n\n## Agent Memory（提示词调优）\n" + block
@@ -403,16 +446,24 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 			turns = conv.Turns
 		}
 	}
-	if len(turns) == 0 {
-		if initial := strings.TrimSpace(prompt); initial != "" {
-			turns = []biz.ConversationTurn{{Role: biz.ConversationRoleHuman, Content: initial}}
-		}
+	turns = biz.AppendHumanTurnIfNeeded(turns, prompt)
+	if r.memory != nil {
+		var meta biz.ContextPrepareMeta
+		turns, meta = r.memory.PrepareTurnsForLLMWithMeta(ctx, sessionID, turns)
+		r.publishContextUsage(ctx, sessionID, meta)
 	}
 	messages := buildLLMMessages(systemText, turns)
 	correctionRounds := 0
 	toolAttempts := map[string]int{}
 
 	for i := 0; i < maxToolLoopIterations; i++ {
+		if r.memory != nil && sessionID != "" && len(messages) > 1 {
+			loopTurns := conversationTurnsFromLLM(messages[1:])
+			var meta biz.ContextPrepareMeta
+			loopTurns, meta = r.memory.PrepareTurnsForLLMWithMeta(ctx, sessionID, loopTurns)
+			r.publishContextUsage(ctx, sessionID, meta)
+			messages = buildLLMMessages(systemText, loopTurns)
+		}
 		callOptions := []llms.CallOption{}
 		if toolset != nil && len(toolset.Tools) > 0 {
 			callOptions = append(callOptions, llms.WithTools(toolset.Tools), llms.WithToolChoice("auto"))
@@ -420,9 +471,11 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 		response, err := modelClient.GenerateContent(ctx, messages, callOptions...)
 		if err != nil {
 			r.log.Warnf("tool calling loop failed: %v", err)
+			r.recordSessionError(ctx, "llm_generate", "", err.Error(), "")
 			return nil, fmt.Errorf("tool calling loop failed: %w", err)
 		}
 		if response == nil || len(response.Choices) == 0 {
+			r.recordSessionError(ctx, "llm_empty_response", "", "tool calling loop returned empty response", "")
 			return nil, errors.New("tool calling loop returned empty response")
 		}
 
@@ -431,6 +484,7 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 		toolCalls := normalizeToolCalls(choice)
 		if len(toolCalls) == 0 {
 			if output == "" {
+				r.recordSessionError(ctx, "llm_empty_output", "", "tool calling loop returned empty output", "")
 				return nil, errors.New("tool calling loop returned empty output")
 			}
 			messages = append(messages, llms.TextParts(llms.ChatMessageTypeAI, output))
@@ -464,45 +518,89 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 				toolAttempts[toolName]++
 			}
 			if toolName == "exec_command" && toolAttempts[toolName] > maxExecCommandAttempts {
-				return nil, fmt.Errorf("tool %s fallback exhausted after %d attempts", toolName, maxExecCommandAttempts)
+				quotaErr := errors.New("exec_command limit reached for this task; use read_file on directories (e.g. read_file internal/biz) and specific files instead")
+				r.recordSessionError(ctx, "exec_command_quota", toolName, quotaErr.Error(), "")
+				observation := formatToolErrorObservation(tc, "", quotaErr, correctionRounds+1)
+				toolRespName := toolName
+				if tc.FunctionCall != nil && strings.TrimSpace(tc.FunctionCall.Name) != "" {
+					toolRespName = tc.FunctionCall.Name
+				}
+				messages = append(messages, llms.MessageContent{
+					Role: llms.ChatMessageTypeTool,
+					Parts: []llms.ContentPart{llms.ToolCallResponse{
+						ToolCallID: tc.ID,
+						Name:       toolRespName,
+						Content:    observation,
+					}},
+				})
+				roundFailed = true
+				lastToolErr = quotaErr
+				continue
 			}
 
 			observation, err := callManagedTool(ctx, toolset, tc)
 			if err != nil {
 				roundFailed = true
 				lastToolErr = err
+				r.recordSessionError(ctx, "tool_error", toolName, err.Error(), observation)
 				observation = formatToolErrorObservation(tc, observation, err, correctionRounds+1)
 			} else if r.memory != nil && toolName != "" {
 				if recordErr := r.memory.RecordSessionToolUsage(ctx, currentTaskID(ctx), toolName); recordErr != nil {
 					r.log.Warnf("record session tool usage failed: %v", recordErr)
 				}
 			}
+			toolRespName := toolName
+			if tc.FunctionCall != nil && strings.TrimSpace(tc.FunctionCall.Name) != "" {
+				toolRespName = tc.FunctionCall.Name
+			}
 			messages = append(messages, llms.MessageContent{
 				Role: llms.ChatMessageTypeTool,
 				Parts: []llms.ContentPart{llms.ToolCallResponse{
 					ToolCallID: tc.ID,
-					Name:       tc.FunctionCall.Name,
+					Name:       toolRespName,
 					Content:    observation,
 				}},
 			})
-			if err != nil && toolName == "exec_command" && toolAttempts[toolName] >= maxExecCommandAttempts {
-				return nil, fmt.Errorf("exec_command fallback exhausted after %d attempts: %w", maxExecCommandAttempts, err)
-			}
 		}
 		r.persistConversation(ctx, sessionID, messages)
 		if roundFailed {
 			correctionRounds++
 			if correctionRounds >= maxToolCorrectionRounds {
 				if lastToolErr != nil {
+					msg := fmt.Sprintf("tool self-correction exhausted after %d rounds: %v", maxToolCorrectionRounds, lastToolErr)
+					r.recordSessionError(ctx, "tool_correction_exhausted", "", msg, lastToolErr.Error())
 					return nil, fmt.Errorf("tool self-correction exhausted after %d rounds: %w", maxToolCorrectionRounds, lastToolErr)
 				}
+				r.recordSessionError(ctx, "tool_correction_exhausted", "", fmt.Sprintf("tool self-correction exhausted after %d rounds", maxToolCorrectionRounds), "")
 				return nil, fmt.Errorf("tool self-correction exhausted after %d rounds", maxToolCorrectionRounds)
 			}
 			continue
 		}
 		correctionRounds = 0
 	}
+	r.recordSessionError(ctx, "tool_loop_exhausted", "", "tool calling loop exceeded max iterations", "")
 	return nil, errors.New("tool calling loop exceeded max iterations")
+}
+
+func (r *langChainAgentRuntime) recordSessionError(ctx context.Context, stage, tool, message, detail string) {
+	if r == nil || r.memory == nil {
+		return
+	}
+	sessionID := currentTaskID(ctx)
+	if sessionID == "" {
+		return
+	}
+	record := biz.SessionErrorRecord{
+		SessionID: sessionID,
+		Agent:     currentTaskAgent(ctx).String(),
+		Stage:     strings.TrimSpace(stage),
+		Tool:      strings.TrimSpace(tool),
+		Message:   strings.TrimSpace(message),
+		Detail:    strings.TrimSpace(detail),
+	}
+	if err := r.memory.RecordSessionError(ctx, record); err != nil {
+		r.log.Warnf("record session error failed: %v", err)
+	}
 }
 
 func formatToolErrorObservation(call llms.ToolCall, output string, err error, attempt int) string {
@@ -528,7 +626,11 @@ func normalizeToolCalls(choice *llms.ContentChoice) []llms.ToolCall {
 		return nil
 	}
 	if len(choice.ToolCalls) > 0 {
-		return choice.ToolCalls
+		out := make([]llms.ToolCall, len(choice.ToolCalls))
+		for i, tc := range choice.ToolCalls {
+			out[i] = normalizeLLMToolCall(tc)
+		}
+		return out
 	}
 	if choice.FuncCall == nil {
 		return nil
@@ -594,6 +696,29 @@ func normalizeToolInput(arguments string) (string, error) {
 
 func (r *langChainAgentRuntime) runFunctionsAgent(_ context.Context, _ any, _, _ string) (*taskv1.TaskResult, error) {
 	return nil, errors.New("runFunctionsAgent is no longer used")
+}
+
+func (r *langChainAgentRuntime) publishContextUsage(ctx context.Context, sessionID string, meta biz.ContextPrepareMeta) {
+	if r.trace == nil || strings.TrimSpace(sessionID) == "" {
+		return
+	}
+	usage := biz.NewContextUsageSnapshot(meta.Stats)
+	r.trace.UpdateContextUsage(sessionID, usage, meta.Compress)
+	if meta.Compress == nil || !meta.Compress.Compressed {
+		return
+	}
+	agent := currentTaskAgent(ctx).String()
+	if agent == "" {
+		agent = "runtime"
+	}
+	r.trace.AppendEvent(biz.DelegationEvent{
+		Time:       time.Now(),
+		TaskID:     sessionID,
+		Agent:      agent,
+		Stage:      "context_compress",
+		Summary:    biz.FormatContextCompressEventSummary(*meta.Compress),
+		ToolOutput: biz.FormatContextCompressEventOutput(*meta.Compress, meta.Stats.Threshold),
+	})
 }
 
 func (r *langChainAgentRuntime) persistConversation(ctx context.Context, sessionID string, messages []llms.MessageContent) {

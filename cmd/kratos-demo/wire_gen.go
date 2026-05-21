@@ -30,13 +30,14 @@ func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, runt
 	if err != nil {
 		return nil, nil, err
 	}
-	agentRuntime := data.NewAgentRuntime(aiConf, runtimeConf, delegationTraceStore, agentMemoryUsecase, logger)
+	sessionChangeStore := data.NewSessionChangeStore(dataConf)
+	agentRuntime := data.NewAgentRuntime(aiConf, runtimeConf, delegationTraceStore, sessionChangeStore, agentMemoryUsecase, logger)
 	taskDispatcher := data.NewTaskDispatcher(taskRepo, agentRuntime, delegationTraceStore, agentMemoryUsecase, logger)
 	taskUsecase := biz.NewTaskUsecase(taskRepo, taskDispatcher)
 	taskService := service.NewTaskService(taskUsecase)
 	agentRuntimeService := service.NewAgentRuntimeService(agentRuntime)
 	grpcServer := server.NewGRPCServer(serverConf, taskService, agentRuntimeService, logger)
-	dashboardService := service.NewDashboardService(delegationTraceStore, agentRuntime, agentMemoryUsecase, runtimeConf)
+	dashboardService := service.NewDashboardService(delegationTraceStore, agentRuntime, agentMemoryUsecase, sessionChangeStore, runtimeConf)
 	httpServer := server.NewHTTPServer(serverConf, taskService, dashboardService, logger)
 	app := newApp(logger, grpcServer, httpServer)
 	return app, func() {

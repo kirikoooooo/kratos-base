@@ -48,6 +48,13 @@ func TestConversationTurnsFromLLMRoundTrip(t *testing.T) {
 	if restored[1].Role != llms.ChatMessageTypeAI {
 		t.Fatalf("second restored role = %s, want ai", restored[1].Role)
 	}
+	toolCall, ok := restored[1].Parts[0].(llms.ToolCall)
+	if !ok {
+		t.Fatalf("expected tool call part, got %T", restored[1].Parts[0])
+	}
+	if toolCall.Type != "function" {
+		t.Fatalf("tool call type = %q, want function", toolCall.Type)
+	}
 	if restored[2].Role != llms.ChatMessageTypeTool {
 		t.Fatalf("third restored role = %s, want tool", restored[2].Role)
 	}

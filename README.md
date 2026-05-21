@@ -1,35 +1,63 @@
 # ActorAgentAlliance
 
-这是一个基于 `Kratos` 的 Go 示例项目。当前阶段的主目标不再是继续扩展游戏垂类 agent，而是先做成一个类似 Claude Code 的通用 agent 底座：先跑通本地任务接入、工具调用、代码库操作和结果回写，后续再考虑 Actor 化执行、多 Agent 编排与 A2A 演进。
-
-当前项目重点不是做完整业务，而是先搭出通用 agent 的最小闭环：
-
-- 通过 HTTP 创建任务
-- 由本地 agent runtime 处理任务
-- 先打通代码库读取、工具调用、任务回写等通用能力
-- 先把任务链路做成可观察、可验证的本地闭环
+基于 `Kratos` 的 Go 示例项目。当前阶段的主目标不再是继续扩展游戏垂类 agent，而是先做成一个类似 Claude Code 的通用 agent 底座：本地任务接入、工具调用、代码库操作、会话记忆与可观测闭环；后续再考虑 Actor 化执行、多 Agent 编排与 A2A 演进。
 
 ## 项目目标
 
 - 把 AI Agent 以低侵入方式接入 `Kratos` 运行时
-- 先实现类似 Claude Code 的通用 coding agent 基础能力
+- 实现类似 Claude Code 的通用 coding agent 基础能力
 - 验证任务投递、执行、工具调用和结果回写链路
 - 为后续演进到 Actor Mailbox、多 agent 协同、A2A 委派和游戏业务模块打基础
 
-## 第一阶段范围
+## 当前能力概览
 
-- 单机、本地、通用的 agent runtime，而不是 actor-first 或 multi-agent-first 的产品形态
-- 通过 HTTP 完成任务创建、执行触发、结果查询与状态回写
-- 打通代码库读取、工具调用、结果整理和基础链路可观测
-- 当前仓库里的 `actor`、`router / coder / reviewer`、A2A 验证链路可以继续保留，但在第一阶段只视为兼容性实现或过渡性验证，不作为产品边界定义
+| 能力 | 说明 |
+|------|------|
+| 任务 API | HTTP `POST /api/v1/tasks` 创建任务，`GET /api/v1/tasks/{taskID}` 查询状态 |
+| Agent Runtime | `default` / `router` / `coder` / `reviewer`，基于 OpenAI 兼容 API + 本地工具循环 |
+| 本地工具 | `read_file`、`edit_file`、`write_file`、`exec_command`（工作区根目录内） |
+| Agent 记忆 | 用户级 / 会话级提示词记忆、对话历史持久化（`.kratos/agent`） |
+| 上下文压缩 | 按 session 统计对话体积，超过阈值自动压缩后再送 LLM |
+| 会话文件变更 | 按 session 累积 `read_file` / `edit_file` / `write_file` 变更，Dashboard 展示 unified diff |
+| 会话错误日志 | 失败写入 JSONL，下一轮 system prompt 注入近期错误摘要 |
+| 委派 Trace | 内存 trace + Dashboard 时间线、执行计划、SSE 实时刷新 |
+| A2A 验证 | router 本地/远端 gRPC 子任务委派（过渡性验证资产） |
 
-## 明确延后到后续阶段
+### 架构分层
 
-- 分布式运行与跨节点调度
-- 多 Agent 编排与统一 coordinator
-- 远程委派和完整 A2A 协议抽象
-- 复杂 dashboard 和实时链路大盘
-- 具体游戏业务 actor 接入与业务消息模型整合
+```text
+service (HTTP/gRPC, Dashboard)
+    ↓
+biz (task, memory, trace, session_change, conversation_compress)
+    ↓
+data (langchain runtime, local_tools, memory_store, task_dispatcher)
+```
+
+### Agent 记忆目录（`data.agent_memory.dir`，默认 `.kratos/agent`）
+
+| 路径 | 内容 |
+|------|------|
+| `users/{user_id}.json` | 用户级：工具/Skill 提示、命令策略、工作区约定 |
+| `sessions/{session_id}.json` | 会话级：提示词微调、本会话已用工具 |
+| `conversations/{session_id}.json` | 会话对话历史（human / ai / tool turns） |
+| `changes/{session_id}.json` | 本会话文件变更快照与 diff |
+| `errors/{session_id}.jsonl` | 本会话错误日志（JSONL，供 AI 排查迭代） |
+
+启动时若用户记忆为空，会从工作区自动发现 `.agents/skills` 与工具目录并写入 bootstrap 提示。
+
+### Dashboard（`/debug/a2a`）
+
+- 按 agent 启动 runtime，固定 session `dashboard-{agent}`，支持**连续对话**（同 session 追加用户消息）
+- **Delegation Timeline**：任务阶段、工具调用、委派、失败等事件
+- **Context Usage**：上下文体积进度条；发生压缩时展示 `context_compress` 事件
+- **Session File Changes**：本会话内文件修改的 unified diff
+- **SSE**：`/debug/a2a/stream` 实时推送 session 状态
+
+### 本地工具约定
+
+- 修改已有文件须先 `read_file`，再用 `edit_file` 原子操作（`insert_line`、`search_replace` 等）；`write_file` 仅用于新建
+- 对目录调用 `read_file`（如 `read_file internal/biz`）返回条目列表，再读具体文件；避免用 `exec_command` 做目录搜索
+- `exec_command` 全任务最多 3 次，超限后返回 tool 观测而非直接终止整轮（引导改用 `read_file`）
 
 ## 启动
 
@@ -45,39 +73,68 @@ go run ./cmd/kratos-demo -conf ./configs
 - gRPC: `127.0.0.1:9000`
 - A2A Dashboard: `http://127.0.0.1:8000/debug/a2a`
 
-## Todo
+### 配置示例（`configs/config.yaml`）
 
-说明：下面“已完成”里的 actor / A2A / 多角色能力，表示仓库当前已经存在的技术验证资产，不等于第一阶段产品目标；第一阶段仍以本地通用 agent 闭环为准。
+```yaml
+data:
+  agent_memory:
+    dir: .kratos/agent
+    user_id: default
+    context_compress_threshold: 200000   # 超过该字符估算值则压缩
+    keep_recent_turns: 24                 # 压缩时保留的最近对话轮次组
+    tool_output_max_chars: 8000
+ai:
+  openai:
+    api_key: "<your-key>"
+    base_url: "https://api.openai-proxy.org/v1"  # 可选，OpenAI 兼容代理
+    model: gpt-5.4-mini
+    timeout_seconds: 180
+```
+
+说明：`default` / `router` / `coder` 在 function calling 场景下会将 `gpt-5*` 模型名规范为 `gpt-4o-mini`（兼容代理能力）；`reviewer` 使用配置中的原始模型名。
+
+### HTTP 创建任务示例
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/v1/tasks \
+  -H "Content-Type: application/json" \
+  -d '{"agent":"default","prompt":"阅读 README 并总结项目结构"}'
+```
+
+## 进度
+
+说明：下面「已完成」中的 actor / A2A / 多角色能力为仓库内技术验证资产；产品边界仍以**本地通用 agent 闭环**为准。
 
 ### 已完成
 
-- [x] `Kratos` HTTP / gRPC 服务基础结构
-- [x] `biz / data / service / server` 分层
-- [x] 任务创建与查询 API
-- [x] 内存版任务存储
-- [x] 基于 actor 的任务调度
-- [x] `router / coder / reviewer` 三类 agent
-- [x] router 本地子任务委派
-- [x] router 远端 gRPC 子任务委派
-- [x] A2A 委派链路 trace 记录
-- [x] A2A 委派链路验证 dashboard
+- [x] `Kratos` HTTP / gRPC 服务与 `biz / data / service / server` 分层
+- [x] 任务创建与查询 API、内存任务存储、actor 任务调度
+- [x] `router / coder / reviewer` agent 与 router 本地/远端委派
+- [x] A2A 委派 trace 与 Dashboard（时间线、SSE、执行计划）
+- [x] LangChain OpenAI 兼容 runtime + 本地工具调用循环
+- [x] Agent 记忆：用户/会话提示词、对话持久化、bootstrap 工具与 Skill 发现
+- [x] 会话上下文压缩与 Dashboard 用量展示
+- [x] 会话级文件变更记录与 Dashboard diff 展示
+- [x] 会话级错误日志（JSONL）与 prompt 注入
+- [x] Dashboard 连续对话（`dashboard-{agent}` 固定 session）
 
-### 计划中（第一阶段）
+### 计划中
 
-- [ ] 持久化任务和执行 trace
-- [ ] 更丰富的 agent 工具调用与结果展示
-- [ ] 补充监控、超时、重试和审计能力
-- [ ] 改善 AI 配置和密钥管理方式
+- [ ] 任务与 trace 的数据库持久化（当前为内存）
+- [ ] 密钥与配置管理（环境变量 / 密钥文件，避免明文进仓库）
+- [ ] 更完整的重试、审计与可观测（指标、结构化日志）
+- [ ] Dashboard 独立「错误历史」面板（当前可通过 JSONL + prompt 注入使用）
 
 ### 后续阶段
 
-- [ ] dashboard 实时刷新和更完整的链路时间线
-- [ ] 更完整的 A2A 协议抽象，而不只依赖当前 gRPC 直连
-- [ ] 接入具体游戏业务 actor 与业务消息模型
+- [ ] 分布式运行与跨节点调度
+- [ ] 统一 `coordinator` 与多 Agent 编排
+- [ ] 完整 A2A 协议抽象（不仅 gRPC 直连）
+- [ ] 游戏业务 actor 与业务消息模型接入
 
-## 多 Agent 协同畅想计划
+## 多 Agent 协同畅想（后续阶段）
 
-以下内容是后续阶段，不属于第一阶段交付范围。第一阶段不会以这些能力作为当前里程碑目标。
+以下内容不属于当前里程碑，保留为演进方向。
 
 项目后续希望从当前的本地通用 runtime 和过渡性的 `router / coder / reviewer` 验证链路，逐步演进到一个更贴近游戏生产场景的一主多从、多 Agent 协同范式。核心思路是引入一个统一调度的 `coordinator`，负责目标拆解、上下文编排、异步收发、状态汇总与回写；再由多个面向不同职责的从属 Agent 并行协作。
 
@@ -127,7 +184,7 @@ go run ./cmd/kratos-demo -conf ./configs
 | NPC对话智能体  |   | 自动游戏AI     |   | 自动化测试AI   |
 +-------+--------+   +-------+--------+   +-------+--------+
         |                    |                    |
-        +---------- 异步消息 / 事件回传 / 状态汇总 ----------+
+        +---------- 异步消息 / 事件回传 / 状态汇总 ----------+ 
                                |
                                v
                     +----------------------+

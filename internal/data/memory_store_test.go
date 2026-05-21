@@ -73,4 +73,33 @@ func TestFileAgentMemoryStoreRoundTrip(t *testing.T) {
 	if len(loadedConv.Turns) != 2 {
 		t.Fatalf("unexpected conversation: %+v", loadedConv)
 	}
+
+	rec := biz.SessionErrorRecord{
+		SessionID: "task-9",
+		Agent:     "default",
+		Stage:     "tool_error",
+		Tool:      "read_file",
+		Message:   "not found",
+	}
+	if err := store.AppendSessionError(ctx, rec); err != nil {
+		t.Fatalf("AppendSessionError: %v", err)
+	}
+	if err := store.AppendSessionError(ctx, biz.SessionErrorRecord{
+		SessionID: "task-9",
+		Stage:     "task_failed",
+		Message:   "boom",
+	}); err != nil {
+		t.Fatalf("AppendSessionError second: %v", err)
+	}
+	listed, err := store.ListSessionErrors(ctx, "task-9", 1)
+	if err != nil {
+		t.Fatalf("ListSessionErrors: %v", err)
+	}
+	if len(listed) != 1 || listed[0].Stage != "task_failed" {
+		t.Fatalf("unexpected listed errors: %+v", listed)
+	}
+	errPath := filepath.Join(dir, "errors", "task-9.jsonl")
+	if _, err := os.Stat(errPath); err != nil {
+		t.Fatalf("error log file missing: %v", err)
+	}
 }

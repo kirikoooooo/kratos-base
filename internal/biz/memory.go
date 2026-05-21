@@ -16,6 +16,8 @@ type AgentMemoryStore interface {
 	SaveSession(ctx context.Context, memory *SessionAgentMemory) error
 	LoadConversation(ctx context.Context, sessionID string) (*SessionConversation, error)
 	SaveConversation(ctx context.Context, memory *SessionConversation) error
+	AppendSessionError(ctx context.Context, record SessionErrorRecord) error
+	ListSessionErrors(ctx context.Context, sessionID string, limit int) ([]SessionErrorRecord, error)
 }
 
 // ConversationRole 对话轮次角色（与 LLM 消息角色对应，不含完整 trace 事件）。
@@ -105,6 +107,18 @@ type SessionAgentMemory struct {
 type AgentMemoryConfig struct {
 	Dir    string
 	UserID string
+	// 会话对话上下文压缩（按 session_id 对 conversation turns 生效）。
+	ContextCompressThreshold int
+	KeepRecentTurns          int
+	ToolOutputMaxChars       int
+}
+
+func (c AgentMemoryConfig) contextCompressConfig() ContextCompressConfig {
+	return ContextCompressConfig{
+		Threshold:          c.ContextCompressThreshold,
+		KeepRecentTurns:    c.KeepRecentTurns,
+		ToolOutputMaxChars: c.ToolOutputMaxChars,
+	}
 }
 
 func (c AgentMemoryConfig) normalizedUserID() string {
@@ -155,12 +169,7 @@ func (uc *AgentMemoryUsecase) StartConversation(ctx context.Context, sessionID s
 	conv.SessionID = sessionID
 	conv.Agent = agent.String()
 	initialPrompt = strings.TrimSpace(initialPrompt)
-	if initialPrompt != "" && !conversationHasHumanTurn(conv) {
-		conv.Turns = append(conv.Turns, ConversationTurn{
-			Role:    ConversationRoleHuman,
-			Content: initialPrompt,
-		})
-	}
+	conv.Turns = AppendHumanTurnIfNeeded(conv.Turns, initialPrompt)
 	conv.UpdatedAt = time.Now()
 	if err := uc.store.SaveConversation(ctx, conv); err != nil {
 		return fmt.Errorf("save conversation: %w", err)
@@ -168,16 +177,25 @@ func (uc *AgentMemoryUsecase) StartConversation(ctx context.Context, sessionID s
 	return uc.PrepareForTask(ctx, sessionID, agent)
 }
 
-func conversationHasHumanTurn(conv *SessionConversation) bool {
-	if conv == nil {
-		return false
+// AppendHumanTurnIfNeeded 在会话末尾追加用户消息（与上一条 human 内容不同才追加，支持连续对话）。
+func AppendHumanTurnIfNeeded(turns []ConversationTurn, prompt string) []ConversationTurn {
+	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return turns
 	}
-	for _, turn := range conv.Turns {
-		if turn.Role == ConversationRoleHuman && strings.TrimSpace(turn.Content) != "" {
-			return true
+	for i := len(turns) - 1; i >= 0; i-- {
+		if turns[i].Role != ConversationRoleHuman {
+			continue
 		}
+		if strings.TrimSpace(turns[i].Content) == prompt {
+			return turns
+		}
+		break
 	}
-	return false
+	return append(turns, ConversationTurn{
+		Role:    ConversationRoleHuman,
+		Content: prompt,
+	})
 }
 
 // LoadConversation 读取会话对话历史。
@@ -213,6 +231,56 @@ func (uc *AgentMemoryUsecase) SaveConversation(ctx context.Context, conv *Sessio
 	}
 	conv.UpdatedAt = time.Now()
 	return uc.store.SaveConversation(ctx, conv)
+}
+
+// ConversationContextStats 统计指定 session 的对话上下文体积。
+func (uc *AgentMemoryUsecase) ConversationContextStats(ctx context.Context, sessionID string, turns []ConversationTurn) ContextCompressStats {
+	if uc == nil {
+		return ContextCompressStats{}
+	}
+	_ = ctx
+	_ = sessionID
+	return AnalyzeConversationContext(turns, uc.config.contextCompressConfig())
+}
+
+// PrepareTurnsForLLM 按 session 配置统计并压缩对话 turns，供 LLM 使用（不修改持久化全量历史）。
+func (uc *AgentMemoryUsecase) PrepareTurnsForLLM(ctx context.Context, sessionID string, turns []ConversationTurn) []ConversationTurn {
+	prepared, _ := uc.PrepareTurnsForLLMWithMeta(ctx, sessionID, turns)
+	return prepared
+}
+
+// PrepareTurnsForLLMWithMeta 与 PrepareTurnsForLLM 相同，并返回统计/压缩元数据供 trace 展示。
+func (uc *AgentMemoryUsecase) PrepareTurnsForLLMWithMeta(ctx context.Context, sessionID string, turns []ConversationTurn) ([]ConversationTurn, ContextPrepareMeta) {
+	meta := ContextPrepareMeta{}
+	if uc == nil || len(turns) == 0 {
+		if len(turns) > 0 {
+			meta.Stats = ContextCompressStats{EstimatedChars: EstimateConversationContextSize(turns)}
+		}
+		return turns, meta
+	}
+	cfg := uc.config.contextCompressConfig()
+	meta.Stats = AnalyzeConversationContext(turns, cfg)
+	if cfg.disabled() || !meta.Stats.NeedsCompress {
+		return turns, meta
+	}
+	compressed, compressResult := CompressConversationTurns(turns, cfg)
+	meta.Compress = &compressResult
+	return compressed, meta
+}
+
+// ConversationContextUsage 基于持久化对话或传入 turns 统计 session 上下文用量。
+func (uc *AgentMemoryUsecase) ConversationContextUsage(ctx context.Context, sessionID string, turns []ConversationTurn) ContextUsageSnapshot {
+	if uc == nil {
+		return ContextUsageSnapshot{}
+	}
+	if len(turns) == 0 {
+		conv, err := uc.LoadConversation(ctx, sessionID)
+		if err != nil || conv == nil {
+			return ContextUsageSnapshot{}
+		}
+		turns = conv.Turns
+	}
+	return NewContextUsageSnapshot(uc.ConversationContextStats(ctx, sessionID, turns))
 }
 
 // ConversationPreview 返回会话首条用户输入摘要，供 trace/dashboard 展示。
@@ -299,7 +367,35 @@ func (uc *AgentMemoryUsecase) RenderPromptContext(ctx context.Context, sessionID
 	if sessionID != "" {
 		session, _ = uc.store.LoadSession(ctx, sessionID)
 	}
-	return FormatAgentMemoryForPrompt(user, session)
+	block := FormatAgentMemoryForPrompt(user, session)
+	if sessionID != "" {
+		if records, err := uc.store.ListSessionErrors(ctx, sessionID, defaultSessionErrorsInPrompt); err == nil {
+			if errBlock := FormatSessionErrorsForPrompt(records, uc.config.Dir, sessionID); errBlock != "" {
+				if block != "" {
+					block += "\n\n"
+				}
+				block += errBlock
+			}
+		}
+	}
+	return block
+}
+
+// RecordSessionError 追加一条会话错误到持久化日志（JSONL）。
+func (uc *AgentMemoryUsecase) RecordSessionError(ctx context.Context, record SessionErrorRecord) error {
+	if uc == nil || uc.store == nil {
+		return nil
+	}
+	record.SessionID = strings.TrimSpace(record.SessionID)
+	if record.SessionID == "" {
+		return nil
+	}
+	if record.Time.IsZero() {
+		record.Time = time.Now()
+	}
+	record.Message = truncateSessionErrorText(record.Message, maxSessionErrorMessage)
+	record.Detail = truncateSessionErrorText(record.Detail, maxSessionErrorDetail)
+	return uc.store.AppendSessionError(ctx, record)
 }
 
 // RecordSessionToolUsage 记录本会话已使用的工具名（用于提示词微调，非对话历史）。

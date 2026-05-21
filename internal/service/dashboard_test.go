@@ -43,7 +43,7 @@ func TestDashboardStreamReturnsStateEvent(t *testing.T) {
 		Output:  "summary",
 	}, nil)
 
-	svc := NewDashboardService(trace, nil, nil, &conf.Runtime{})
+	svc := NewDashboardService(trace, nil, nil, nil, &conf.Runtime{})
 	mux := dashboardTestMux{ServeMux: http.NewServeMux()}
 	svc.Register(mux)
 
@@ -89,7 +89,7 @@ func TestRunConversationAppendsFinalAnswerEvent(t *testing.T) {
 			Output:  "final answer content",
 		},
 	}
-	svc := NewDashboardService(trace, runtime, nil, &conf.Runtime{})
+	svc := NewDashboardService(trace, runtime, nil, nil, &conf.Runtime{})
 	svc.markAgentStarted(biz.TaskAgentDefault)
 
 	result, err := svc.runConversation(context.Background(), "session-final", biz.TaskAgentDefault, "summarize README")
@@ -134,7 +134,7 @@ func (f fakeDashboardRuntime) OnStop()                     {}
 func (f fakeDashboardRuntime) Name() string                { return "fake-dashboard-runtime" }
 func (f fakeDashboardRuntime) Supports(agent biz.TaskAgent) bool {
 	switch agent {
-	case biz.TaskAgentDefault, biz.TaskAgentRouter, biz.TaskAgentCoder:
+	case biz.TaskAgentDefault, biz.TaskAgentRouter, biz.TaskAgentCoder, biz.TaskAgentReviewer:
 		return true
 	default:
 		return false

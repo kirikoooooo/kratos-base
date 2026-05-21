@@ -116,6 +116,33 @@ func (s *memoryTraceStore) UpdatePlan(taskID string, steps []biz.PlanStep) {
 	s.broadcastLocked()
 }
 
+func (s *memoryTraceStore) UpdateContextUsage(taskID string, usage biz.ContextUsageSnapshot, compress *biz.ContextCompressResult) {
+	if strings.TrimSpace(taskID) == "" {
+		return
+	}
+	if usage.UpdatedAt.IsZero() {
+		usage.UpdatedAt = time.Now()
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	session := s.ensureSessionLocked(taskID)
+	if usage.CompressCount == 0 {
+		usage.CompressCount = session.ContextUsage.CompressCount
+	}
+	if compress != nil && compress.Compressed {
+		usage.CompressCount = session.ContextUsage.CompressCount + 1
+		usage.LastOriginalChars = compress.OriginalChars
+		usage.LastCompressedChars = compress.CompressedChars
+		usage.LastOmittedTurns = compress.OmittedTurns
+		usage.LastTruncatedTools = compress.TruncatedTools
+	}
+	session.ContextUsage = usage
+	session.UpdatedAt = usage.UpdatedAt
+	s.broadcastLocked()
+}
+
 func (s *memoryTraceStore) ListSessions(limit int) []biz.DelegationSession {
 	s.mu.RLock()
 	defer s.mu.RUnlock()

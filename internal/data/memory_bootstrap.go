@@ -67,7 +67,7 @@ func discoverToolHints() []biz.ToolHint {
 	if err != nil || catalog == nil {
 		return defaultToolHints()
 	}
-	names := []string{"read_file", "write_file", "exec_command"}
+	names := []string{"read_file", "edit_file", "write_file", "exec_command"}
 	hints := make([]biz.ToolHint, 0, len(names))
 	for _, name := range names {
 		def, ok := catalog.Lookup(name)
@@ -87,8 +87,9 @@ func discoverToolHints() []biz.ToolHint {
 
 func defaultToolHints() []biz.ToolHint {
 	return []biz.ToolHint{
-		{Name: "read_file", WhenToUse: "查看 README、配置、源码与目录结构", Constraints: "路径相对于工作区根目录"},
-		{Name: "write_file", WhenToUse: "在确认方案后修改或新增文件", Constraints: "不要编造未写入的内容"},
+		{Name: "read_file", WhenToUse: "查看 README、配置、源码；列出目录（如 internal/biz）用 read_file 传目录路径", Constraints: "路径相对于工作区根目录；目录会返回 entry 列表"},
+		{Name: "edit_file", WhenToUse: "修改已有文件：插入(insert_line/insert_after_line/prepend/append)、删除(delete_line/delete_lines/delete_string)、替换(replace_line/replace_lines/search_replace)", Constraints: "修改前必须先 read_file；按行号操作不要用 append"},
+		{Name: "write_file", WhenToUse: "仅创建新文件或确认整文件重写", Constraints: "对已有文件会拒绝写入"},
 		{Name: "exec_command", WhenToUse: "编译、测试或定位文件", Constraints: "全任务最多 3 次；优先 read_file"},
 	}
 }
@@ -106,8 +107,8 @@ func defaultCommandPolicies() []biz.CommandPolicy {
 		},
 		{
 			Situation: "read_file 因路径不存在失败",
-			Commands:  []string{"exec_command dir /s /b <pattern>"},
-			Notes:     "修正路径后再 read_file；exec_command 全任务最多 3 次",
+			Commands:  []string{"read_file internal/biz", "read_file internal"},
+			Notes:     "先 read_file 父目录确认路径；勿反复 exec_command；exec 全任务最多 3 次",
 		},
 		{
 			Situation: "需要系统化排查工具/任务失败",

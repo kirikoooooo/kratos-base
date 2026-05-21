@@ -1,0 +1,20 @@
+{
+  "files": [
+    {
+      "path": "new.txt",
+      "status": "created",
+      "current": "content\n",
+      "unified_diff": "--- new.txt (session start)\n+++ new.txt (current)\n@@ change @@\n+content",
+      "operations": [
+        {
+          "time": "2026-05-21T15:05:03.966788+08:00",
+          "tool": "write_file",
+          "operation": "create",
+          "summary": "created new file"
+        }
+      ],
+      "updated_at": "2026-05-21T15:05:03.966788+08:00"
+    }
+  ],
+  "task_id": "session-test-create"
+}

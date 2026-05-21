@@ -14,11 +14,15 @@ data:
   agent_memory:
     dir: .kratos/agent
     user_id: default
+    context_compress_threshold: 200000
+    keep_recent_turns: 24  # 压缩时保留的最近对话轮次组（human 或 ai+tool），非单条 turn 数
+    tool_output_max_chars: 8000
 ai:
   openai:
     api_key: "sk-9LAwFafTcQgGzTmo01XVzYk7LmVBj5Ba8zb85twR88TsyKRO"
     base_url: "https://api.openai-proxy.org/v1"
     model: gpt-5.4-mini
+    timeout_seconds: 180
 runtime:
   remotes:
     - agent: coder

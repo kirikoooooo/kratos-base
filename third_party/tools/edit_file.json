@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "edit_file",
+    "description": "修改已有文件的原子编辑工具。行号从 1 开始；修改前必须先 read_file。不要用 write_file 改已有文件。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "JSON。插入: prepend|insert_line|insert_after_line|append；删除: delete_line|delete_lines|delete_string；替换: replace_line|replace_lines|search_replace。示例 insert_line:{\"path\":\"a.md\",\"operation\":\"insert_line\",\"line\":41,\"new_string\":\"text\"}；delete_lines:{\"path\":\"a.md\",\"operation\":\"delete_lines\",\"line\":10,\"line_end\":12}；replace_line:{\"path\":\"a.md\",\"operation\":\"replace_line\",\"line\":5,\"new_string\":\"new\"}。"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

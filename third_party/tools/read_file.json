@@ -2,7 +2,7 @@
   "type": "function",
   "function": {
     "name": "read_file",
-    "description": "读取仓库内的文件内容，可用于查看代码、配置和文档。",
+    "description": "读取仓库内文件或列出目录。传文件路径返回内容；传目录路径（如 internal/biz）返回条目列表。分析 biz 等领域时先 read_file 目录再读各 .go 文件。",
     "parameters": {
       "type": "object",
       "properties": {

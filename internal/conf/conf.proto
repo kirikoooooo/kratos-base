@@ -16,6 +16,8 @@ message AI {
     string api_key = 1;
     string base_url = 2;
     string model = 3;
+    // 单次 chat/completions 请求超时（秒），含 TLS 握手；默认 120，网络慢可调大。
+    int64 timeout_seconds = 4;
   }
 
   OpenAI openai = 1;
@@ -47,6 +49,12 @@ message Data {
   message AgentMemory {
     string dir = 1;
     string user_id = 2;
+    // 会话对话上下文字符数上限，超过则压缩。0=默认 200000；-1=关闭压缩。
+    int64 context_compress_threshold = 3;
+    // 压缩时保留的最近 turn 数（含 ai/tool）。
+    int32 keep_recent_turns = 4;
+    // 压缩时对单条 tool 观测结果保留的最大字符数。
+    int32 tool_output_max_chars = 5;
   }
 
   Database database = 1;

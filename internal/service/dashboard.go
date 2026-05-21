@@ -20,6 +20,7 @@ type DashboardService struct {
 	trace   biz.DelegationTraceStore
 	runtime biz.AgentRuntime
 	memory  *biz.AgentMemoryUsecase
+	changes biz.SessionChangeStore
 	config  *conf.Runtime
 	page    *template.Template
 	mu      sync.RWMutex
@@ -39,11 +40,12 @@ type dashboardMessageRequest struct {
 	Prompt string `json:"prompt"`
 }
 
-func NewDashboardService(trace biz.DelegationTraceStore, runtime biz.AgentRuntime, memory *biz.AgentMemoryUsecase, config *conf.Runtime) *DashboardService {
+func NewDashboardService(trace biz.DelegationTraceStore, runtime biz.AgentRuntime, memory *biz.AgentMemoryUsecase, changes biz.SessionChangeStore, config *conf.Runtime) *DashboardService {
 	return &DashboardService{
 		trace:   trace,
 		runtime: runtime,
 		memory:  memory,
+		changes: changes,
 		config:  config,
 		page:    template.Must(template.New("dashboard").Parse(dashboardTemplate)),
 		agents: map[biz.TaskAgent]*dashboardAgentState{
@@ -55,6 +57,9 @@ func NewDashboardService(trace biz.DelegationTraceStore, runtime biz.AgentRuntim
 			},
 			biz.TaskAgentCoder: {
 				Agent: biz.TaskAgentCoder.String(),
+			},
+			biz.TaskAgentReviewer: {
+				Agent: biz.TaskAgentReviewer.String(),
 			},
 		},
 	}
@@ -114,6 +119,7 @@ func (s *DashboardService) handleStream(w http.ResponseWriter, r *http.Request) 
 			if !ok {
 				return
 			}
+			sessions = s.enrichSessions(sessions)
 			payload := map[string]any{
 				"server_time": time.Now().Format(time.RFC3339),
 				"agents":      s.agentStates(),
@@ -176,7 +182,7 @@ func (s *DashboardService) handleMessage(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	taskID := fmt.Sprintf("session-%d", time.Now().UnixNano())
+	taskID := dashboardSessionID(agent)
 	s.rememberAgentTask(agent, taskID, prompt)
 
 	result, err := s.runConversation(context.Background(), taskID, agent, prompt)
@@ -236,13 +242,49 @@ func (s *DashboardService) sessions() []biz.DelegationSession {
 	if s.trace == nil {
 		return nil
 	}
-	sessions := s.trace.ListSessions(12)
-	if s.memory == nil {
+	return s.enrichSessions(s.trace.ListSessions(12))
+}
+
+func mergeContextUsage(traceUsage, liveUsage biz.ContextUsageSnapshot) biz.ContextUsageSnapshot {
+	if liveUsage.Threshold <= 0 && traceUsage.Threshold > 0 {
+		liveUsage.Threshold = traceUsage.Threshold
+	}
+	if liveUsage.Threshold > 0 && liveUsage.UsagePercent == 0 && liveUsage.EstimatedChars > 0 {
+		liveUsage.UsagePercent = float64(liveUsage.EstimatedChars) / float64(liveUsage.Threshold) * 100
+		if liveUsage.UsagePercent > 100 {
+			liveUsage.UsagePercent = 100
+		}
+	}
+	if traceUsage.CompressCount > liveUsage.CompressCount {
+		liveUsage.CompressCount = traceUsage.CompressCount
+	}
+	if traceUsage.LastOriginalChars > 0 {
+		liveUsage.LastOriginalChars = traceUsage.LastOriginalChars
+		liveUsage.LastCompressedChars = traceUsage.LastCompressedChars
+		liveUsage.LastOmittedTurns = traceUsage.LastOmittedTurns
+		liveUsage.LastTruncatedTools = traceUsage.LastTruncatedTools
+	}
+	if traceUsage.UpdatedAt.After(liveUsage.UpdatedAt) {
+		liveUsage.UpdatedAt = traceUsage.UpdatedAt
+	}
+	liveUsage.NeedsCompress = liveUsage.Threshold > 0 && liveUsage.EstimatedChars > liveUsage.Threshold
+	return liveUsage
+}
+
+func (s *DashboardService) enrichSessions(sessions []biz.DelegationSession) []biz.DelegationSession {
+	if len(sessions) == 0 {
 		return sessions
 	}
 	ctx := context.Background()
 	for i := range sessions {
-		sessions[i].ConversationPreview = s.memory.ConversationPreview(ctx, sessions[i].TaskID)
+		if s.memory != nil {
+			sessions[i].ConversationPreview = s.memory.ConversationPreview(ctx, sessions[i].TaskID)
+			liveUsage := s.memory.ConversationContextUsage(ctx, sessions[i].TaskID, nil)
+			sessions[i].ContextUsage = mergeContextUsage(sessions[i].ContextUsage, liveUsage)
+		}
+		if s.changes != nil {
+			sessions[i].FileChanges = s.changes.Snapshot(sessions[i].TaskID)
+		}
 	}
 	return sessions
 }
@@ -251,7 +293,7 @@ func (s *DashboardService) agentStates() []dashboardAgentState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	agents := []biz.TaskAgent{biz.TaskAgentDefault, biz.TaskAgentRouter, biz.TaskAgentCoder}
+	agents := []biz.TaskAgent{biz.TaskAgentDefault, biz.TaskAgentRouter, biz.TaskAgentCoder, biz.TaskAgentReviewer}
 	result := make([]dashboardAgentState, 0, len(agents))
 	for _, agent := range agents {
 		state, ok := s.agents[agent]
@@ -330,10 +372,20 @@ func (s *DashboardService) runConversation(ctx context.Context, taskID string, a
 		result, err = s.runRouterConversation(ctx, taskID, prompt, true)
 	case biz.TaskAgentCoder:
 		result, err = s.runCoderConversation(ctx, taskID, prompt)
+	case biz.TaskAgentReviewer:
+		result, err = s.executeAgent(ctx, taskID, biz.TaskAgentReviewer, prompt)
 	default:
 		err = fmt.Errorf("agent %s is not supported by dashboard", agent)
 	}
 
+	if err != nil && s.memory != nil {
+		_ = s.memory.RecordSessionError(ctx, biz.SessionErrorRecord{
+			SessionID: taskID,
+			Agent:     agent.String(),
+			Stage:     "message_failed",
+			Message:   err.Error(),
+		})
+	}
 	if s.trace != nil {
 		if err != nil {
 			s.trace.AppendEvent(biz.DelegationEvent{
@@ -448,10 +500,14 @@ func (s *DashboardService) executeAgent(ctx context.Context, taskID string, agen
 	})
 }
 
+func dashboardSessionID(agent biz.TaskAgent) string {
+	return fmt.Sprintf("dashboard-%s", strings.TrimSpace(agent.String()))
+}
+
 func normalizeDashboardAgent(raw string) (biz.TaskAgent, error) {
 	agent := biz.TaskAgent(strings.ToLower(strings.TrimSpace(raw)))
 	switch agent {
-	case biz.TaskAgentDefault, biz.TaskAgentRouter, biz.TaskAgentCoder:
+	case biz.TaskAgentDefault, biz.TaskAgentRouter, biz.TaskAgentCoder, biz.TaskAgentReviewer:
 		return agent, nil
 	default:
 		return "", fmt.Errorf("unsupported dashboard agent: %s", raw)
@@ -571,6 +627,24 @@ const dashboardTemplate = `<!doctype html>
     details.preview[open] summary::before { content:"收起"; }
     .preview-body { white-space:pre-wrap; line-height:1.5; color:var(--muted); margin-top:8px; }
     .empty { padding:20px; border:1px dashed var(--line); border-radius:16px; color:var(--muted); text-align:center; }
+    .file-change { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:rgba(255,255,255,.72); margin-top:10px; }
+    .file-change-head { display:flex; justify-content:space-between; gap:10px; align-items:baseline; margin-bottom:8px; }
+    .file-change-status { font-size:11px; font-weight:700; padding:3px 8px; border-radius:999px; background:rgba(15,118,110,.12); color:#0f766e; }
+    .file-change-status.created { background:rgba(15,118,110,.12); color:#0f766e; }
+    .file-change-status.modified { background:rgba(37,99,235,.12); color:#1d4ed8; }
+    .file-change-status.deleted { background:rgba(194,65,12,.12); color:#c2410c; }
+    .diff-view { margin-top:8px; border:1px solid var(--line); border-radius:12px; background:#0f172a; color:#e2e8f0; overflow:auto; max-height:360px; }
+    .diff-line { display:block; padding:1px 10px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; font-size:12px; line-height:1.45; white-space:pre; }
+    .diff-line.add { background:rgba(22,163,74,.22); color:#86efac; }
+    .diff-line.del { background:rgba(220,38,38,.22); color:#fca5a5; }
+    .diff-line.ctx { color:#94a3b8; }
+    .diff-line.meta { color:#67e8f9; background:rgba(8,145,178,.18); }
+    .context-usage { border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:rgba(255,255,255,.78); margin-top:10px; }
+    .context-usage-bar { height:10px; border-radius:999px; background:rgba(148,163,184,.25); overflow:hidden; margin-top:8px; }
+    .context-usage-fill { height:100%; border-radius:999px; background:linear-gradient(90deg,#0f766e,#14b8a6); transition:width .25s ease; }
+    .context-usage-fill.warn { background:linear-gradient(90deg,#d97706,#f59e0b); }
+    .context-usage-fill.critical { background:linear-gradient(90deg,#dc2626,#f87171); }
+    .event.context-compress { border-color:rgba(217,119,6,.35); background:rgba(255,251,235,.82); }
     input,select,textarea { min-width:180px; padding:11px 14px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.92); }
     textarea { width:100%; min-height:110px; resize:vertical; }
     .agent-actions { display:flex; gap:10px; flex-wrap:wrap; }
@@ -582,12 +656,13 @@ const dashboardTemplate = `<!doctype html>
     <section class="hero">
       <div class="eyebrow">Runtime Inspection</div>
       <h1>观察任务执行与工具闭环</h1>
-      <div class="sub">这个页面用于观察第一阶段通用 agent runtime 的任务执行过程。你可以直接给 default profile 发送任务，也可以继续验证 router / coder 兼容链路。右侧时间线会展示输入、工具调用、委派、结果与失败原因。</div>
+      <div class="sub">这个页面用于观察第一阶段通用 agent runtime 的任务执行过程。你可以直接给 default profile 发送任务，也可以继续验证 router / coder / reviewer 兼容链路。右侧时间线会展示输入、工具调用、委派、结果与失败原因。</div>
       <div class="formline">
         <span class="chip" id="serverTime">loading</span>
         <button id="startDefaultBtn">启动 Default Agent</button>
         <button id="startRouterBtn">启动 Router Agent</button>
         <button id="startCoderBtn">启动 Coder Agent</button>
+        <button id="startReviewerBtn">启动 Reviewer Agent</button>
         <button class="secondary" id="refreshBtn">刷新状态</button>
       </div>
       <div class="legend">
@@ -600,14 +675,14 @@ const dashboardTemplate = `<!doctype html>
       <aside class="panel">
         <h2>Send Message</h2>
         <div class="meta">
-          <select id="agent"><option value="default">default</option><option value="router">router</option><option value="coder">coder</option></select>
+          <select id="agent"><option value="default">default</option><option value="router">router</option><option value="coder">coder</option><option value="reviewer">reviewer</option></select>
           <textarea id="prompt">请先读取 README.md 的前 20 行，再总结第一阶段目标。</textarea>
           <div class="agent-actions"><button id="sendBtn">发送消息</button></div>
         </div>
         <h2 style="margin-top:18px;">Remote Targets</h2><div class="meta" id="remotes"></div>
         <h2 style="margin-top:18px;">Recent Sessions</h2><div class="session-list" id="sessions"></div>
       </aside>
-      <main class="panel"><h2>Delegation Timeline</h2><div id="timeline"></div><h2 style="margin-top:18px;">Execution Plan</h2><div id="plan"></div></main>
+      <main class="panel"><h2>Delegation Timeline</h2><div id="timeline"></div><h2 style="margin-top:18px;">Session File Changes</h2><div id="fileChanges"></div><h2 style="margin-top:18px;">Execution Plan</h2><div id="plan"></div></main>
     </section>
   </div>
   <script>
@@ -618,6 +693,7 @@ const dashboardTemplate = `<!doctype html>
     const remotesEl = document.getElementById("remotes");
     const sessionsEl = document.getElementById("sessions");
     const timelineEl = document.getElementById("timeline");
+    const fileChangesEl = document.getElementById("fileChanges");
     const planEl = document.getElementById("plan");
     const serverTimeEl = document.getElementById("serverTime");
     async function loadState() {
@@ -649,7 +725,7 @@ const dashboardTemplate = `<!doctype html>
         await loadState();
       } finally { btn.disabled = false; btn.textContent = "发送消息"; }
     }
-    function render() { renderAgents(); renderRemotes(); renderSessions(); renderTimeline(); renderPlan(); }
+    function render() { renderAgents(); renderRemotes(); renderSessions(); renderTimeline(); renderFileChanges(); renderPlan(); }
     function summarizeMultiline(text, maxLines) {
       const value = String(text || "").trim();
       if (!value) { return ""; }
@@ -693,6 +769,7 @@ const dashboardTemplate = `<!doctype html>
         remote_execute_done: "Remote Task Finished",
         remote_execute_failed: "Remote Task Failed",
         tool_read_file: "Tool Call: Read File",
+        tool_edit_file: "Tool Call: Edit File",
         tool_write_file: "Tool Call: Write File",
         tool_exec_command: "Tool Call: Run Command",
         message_done: "Message Done",
@@ -703,12 +780,14 @@ const dashboardTemplate = `<!doctype html>
         verification_failed: "Verification Failed",
         task_running: "Task Running",
         task_done: "Task Done",
-        task_failed: "Task Failed"
+        task_failed: "Task Failed",
+        context_compress: "Context Compressed"
       };
       return labels[stage] || String(stage || "-");
     }
     function stageExtraMeta(event) {
       const stage = String(event.stage || "");
+      if (stage === "context_compress") { return "session memory compression"; }
       if (stage === "final_answer") { return "assistant response"; }
       if (stage.startsWith("tool_")) { return event.tool_name ? "tool: " + event.tool_name : "tool event"; }
       if (stage === "delegate_local" || stage === "delegate_remote") { return event.mode ? "to " + event.mode : "delegation"; }
@@ -723,11 +802,12 @@ const dashboardTemplate = `<!doctype html>
     function renderEventCard(event, taskId, eventIndex) {
       const stage = String(event.stage || "-");
       const isFinalAnswer = stage === "final_answer";
+      const isContextCompress = stage === "context_compress";
       const isToolEvent = stage.startsWith("tool_");
       const audience = eventAudience(stage);
       const blockPrefix = String(taskId || "") + "::" + String(eventIndex);
       const body = []
-      body.push('<div class="event '+(audience === "user" ? 'user-visible' : 'internal-flow')+(isFinalAnswer ? ' final-answer' : '')+'">');
+      body.push('<div class="event '+(audience === "user" ? 'user-visible' : 'internal-flow')+(isFinalAnswer ? ' final-answer' : '')+(isContextCompress ? ' context-compress' : '')+'">');
       body.push('<div class="event-top"><div><div class="event-stage">'+escapeHtml(stageDisplayLabel(stage))+'</div>' + (stage ? '<div class="event-raw">'+escapeHtml(stage)+'</div>' : '') + '</div><div class="small">'+escapeHtml(event.time || "")+'</div></div>');
       body.push('<div class="event-kind '+(audience === "user" ? 'user' : 'internal')+'">'+(audience === "user" ? 'USER' : 'INTERNAL')+'</div>');
       const meta = stageExtraMeta(event);
@@ -769,8 +849,75 @@ const dashboardTemplate = `<!doctype html>
     function renderSessions() {
       const sessions = state.sessions || [];
       if (!sessions.length) { sessionsEl.innerHTML = '<div class="empty">还没有任务或验证记录</div>'; return; }
-      sessionsEl.innerHTML = sessions.map(session => '<div class="session '+(session.task_id === selectedTaskId ? "active" : "")+'" data-task-id="'+escapeHtml(session.task_id)+'"><div class="k">task</div><div class="v">'+escapeHtml(session.task_id)+'</div><div class="k" style="margin-top:8px;">root agent</div><div class="v">'+escapeHtml(session.root_agent || "-")+'</div><div class="k" style="margin-top:8px;">status</div><div class="v '+(session.status === "failed" ? "status-failed" : "status-ok")+'">'+escapeHtml(session.status || "-")+'</div></div>').join("");
-      document.querySelectorAll(".session").forEach(el => el.addEventListener("click", () => { selectedTaskId = el.dataset.taskId; renderSessions(); renderTimeline(); }));
+      sessionsEl.innerHTML = sessions.map(session => {
+        const usage = session.context_usage || {};
+        const pct = usage.threshold ? Math.min(100, Number(usage.usage_percent || 0)).toFixed(0) : "-";
+        return '<div class="session '+(session.task_id === selectedTaskId ? "active" : "")+'" data-task-id="'+escapeHtml(session.task_id)+'"><div class="k">task</div><div class="v">'+escapeHtml(session.task_id)+'</div><div class="k" style="margin-top:8px;">root agent</div><div class="v">'+escapeHtml(session.root_agent || "-")+'</div><div class="k" style="margin-top:8px;">context</div><div class="v">'+escapeHtml(formatChars(usage.estimated_chars))+' / '+escapeHtml(formatChars(usage.threshold))+' ('+escapeHtml(pct)+'%)</div><div class="k" style="margin-top:8px;">status</div><div class="v '+(session.status === "failed" ? "status-failed" : "status-ok")+'">'+escapeHtml(session.status || "-")+'</div></div>';
+      }).join("");
+      document.querySelectorAll(".session").forEach(el => el.addEventListener("click", () => { selectedTaskId = el.dataset.taskId; renderSessions(); renderTimeline(); renderFileChanges(); renderPlan(); }));
+    }
+    function formatChars(n) {
+      const value = Number(n || 0);
+      if (value >= 1000) { return (value / 1000).toFixed(1) + "k"; }
+      return String(value);
+    }
+    function renderContextUsageBlock(usage) {
+      if (!usage || !usage.threshold) {
+        return '<div class="context-usage"><div class="small">上下文统计未启用（context_compress_threshold: -1）</div></div>';
+      }
+      const percent = Math.max(0, Math.min(100, Number(usage.usage_percent || 0)));
+      const fillClass = percent >= 95 ? "critical" : (percent >= 80 ? "warn" : "");
+      const compressNote = usage.compress_count
+        ? '<div class="small" style="margin-top:8px;">已压缩 '+escapeHtml(String(usage.compress_count))+' 次'
+          + (usage.last_original_chars ? '；最近 '+escapeHtml(formatChars(usage.last_original_chars))+' → '+escapeHtml(formatChars(usage.last_compressed_chars)) : '')
+          + '</div>'
+        : '';
+      return '<div class="context-usage"><div class="event-top"><div class="v">Context Usage</div><div class="small">'+escapeHtml(formatChars(usage.estimated_chars))+' / '+escapeHtml(formatChars(usage.threshold))+' chars</div></div>'
+        + '<div class="context-usage-bar"><div class="context-usage-fill '+fillClass+'" style="width:'+percent+'%;"></div></div>'
+        + '<div class="small" style="margin-top:6px;">'+percent.toFixed(1)+'%'
+        + (usage.needs_compress ? ' · <span class="status-failed">超过阈值，发送 LLM 前将压缩</span>' : ' · <span class="status-ok">未超阈值</span>')
+        + '</div>' + compressNote + '</div>';
+    }
+    function renderDiffLines(unifiedDiff) {
+      const lines = String(unifiedDiff || "").split("\n");
+      return lines.map(line => {
+        let cls = "ctx";
+        if (line.startsWith("+++ ") || line.startsWith("--- ") || line.startsWith("@@")) { cls = "meta"; }
+        else if (line.startsWith("+")) { cls = "add"; }
+        else if (line.startsWith("-")) { cls = "del"; }
+        return '<span class="diff-line '+cls+'">'+escapeHtml(line)+'</span>';
+      }).join("");
+    }
+    function renderFileChanges() {
+      const sessions = state.sessions || [];
+      const current = sessions.find(s => s.task_id === selectedTaskId) || sessions[0];
+      if (!current) { fileChangesEl.innerHTML = '<div class="empty">选择一个 session 查看本次对话的文件变更</div>'; return; }
+      const changes = current.file_changes || [];
+      if (!changes.length) {
+        fileChangesEl.innerHTML = '<div class="empty">这个 session 还没有通过 write_file / edit_file 修改文件</div>';
+        return;
+      }
+      fileChangesEl.innerHTML = changes.map((change, index) => {
+        const ops = (change.operations || []).map(op => escapeHtml((op.tool || "-") + (op.operation ? " / " + op.operation : "") + (op.summary ? " — " + op.summary : ""))).join("<br>");
+        const expandId = String(current.task_id || "") + "::file-change::" + String(index);
+        const diffBlock = change.unified_diff
+          ? '<details class="preview" data-expand-id="'+escapeHtml(expandId)+'"'+detailsOpenAttr(expandId)+'><summary>查看 diff（相对会话开始）</summary><div class="diff-view">'+renderDiffLines(change.unified_diff)+'</div></details>'
+          : '<div class="small" style="margin-top:8px;">无文本 diff（可能为二进制或空变更）</div>';
+        return '<div class="file-change"><div class="file-change-head"><div class="v">'+escapeHtml(change.path || "-")+'</div><span class="file-change-status '+escapeHtml(change.status || "modified")+'">'+escapeHtml(change.status || "modified")+'</span></div>'
+          + (ops ? '<div class="small">'+ops+'</div>' : '')
+          + diffBlock
+          + '</div>';
+      }).join("");
+    }
+    if (!fileChangesEl.dataset.expandBound) {
+      fileChangesEl.dataset.expandBound = "1";
+      fileChangesEl.addEventListener("toggle", (evt) => {
+        const el = evt.target;
+        if (!el || !el.matches || !el.matches("details.preview")) { return; }
+        const id = el.dataset.expandId;
+        if (!id) { return; }
+        if (el.open) { expandedBlocks.add(id); } else { expandedBlocks.delete(id); }
+      }, true);
     }
     function renderTimeline() {
       const sessions = state.sessions || [];
@@ -782,7 +929,9 @@ const dashboardTemplate = `<!doctype html>
         + '<div class="k" style="margin-top:10px;">output</div><div class="prompt">'+escapeHtml(current.result_output || '-')+'</div>'
         + (current.error ? '<div class="k" style="margin-top:10px;">error</div><div class="prompt" style="color:#c2410c;">'+escapeHtml(current.error)+'</div>' : '')
         + '</div>';
-      const header = '<div class="event"><div class="event-top"><div><div class="small">task</div><div class="v">'+escapeHtml(current.task_id)+'</div></div><div class="chip">'+escapeHtml(current.status || "-")+'</div></div><div class="prompt">'+escapeHtml(current.conversation_preview || "")+'</div></div>' + finalResult;
+      const header = '<div class="event"><div class="event-top"><div><div class="small">task</div><div class="v">'+escapeHtml(current.task_id)+'</div></div><div class="chip">'+escapeHtml(current.status || "-")+'</div></div><div class="prompt">'+escapeHtml(current.conversation_preview || "")+'</div></div>'
+        + renderContextUsageBlock(current.context_usage || {})
+        + finalResult;
       const events = current.events || [];
       if (!events.length) { timelineEl.innerHTML = header + '<div class="empty" style="margin-top:12px;">这个 session 还没有采集到事件</div>'; return; }
       timelineEl.innerHTML = header + '<div class="events" style="margin-top:12px;">' + events.map((event, index) => renderEventCard(event, current.task_id, index)).join("") + '</div>';
@@ -808,6 +957,7 @@ const dashboardTemplate = `<!doctype html>
     document.getElementById("startDefaultBtn").addEventListener("click", () => startAgent("default"));
     document.getElementById("startRouterBtn").addEventListener("click", () => startAgent("router"));
     document.getElementById("startCoderBtn").addEventListener("click", () => startAgent("coder"));
+    document.getElementById("startReviewerBtn").addEventListener("click", () => startAgent("reviewer"));
     document.getElementById("sendBtn").addEventListener("click", sendMessage);
     function connectStream() {
       const es = new EventSource("/debug/a2a/stream");

@@ -282,12 +282,14 @@ func (x *Runtime) GetRemotes() []*Runtime_RemoteAgent {
 }
 
 type AI_OpenAI struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	ApiKey        string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
-	BaseUrl       string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
-	Model         string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	ApiKey  string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	BaseUrl string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	Model   string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	// 单次 chat/completions 请求超时（秒），含 TLS 握手；默认 120，网络慢可调大。
+	TimeoutSeconds int64 `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AI_OpenAI) Reset() {
@@ -339,6 +341,13 @@ func (x *AI_OpenAI) GetModel() string {
 		return x.Model
 	}
 	return ""
+}
+
+func (x *AI_OpenAI) GetTimeoutSeconds() int64 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
 }
 
 type Server_HTTP struct {
@@ -514,11 +523,17 @@ func (x *Data_Database) GetSource() string {
 }
 
 type Data_AgentMemory struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Dir           string                 `protobuf:"bytes,1,opt,name=dir,proto3" json:"dir,omitempty"`
-	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	Dir    string                 `protobuf:"bytes,1,opt,name=dir,proto3" json:"dir,omitempty"`
+	UserId string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// 会话对话上下文字符数上限，超过则压缩。0=默认 200000；-1=关闭压缩。
+	ContextCompressThreshold int64 `protobuf:"varint,3,opt,name=context_compress_threshold,json=contextCompressThreshold,proto3" json:"context_compress_threshold,omitempty"`
+	// 压缩时保留的最近 turn 数（含 ai/tool）。
+	KeepRecentTurns int32 `protobuf:"varint,4,opt,name=keep_recent_turns,json=keepRecentTurns,proto3" json:"keep_recent_turns,omitempty"`
+	// 压缩时对单条 tool 观测结果保留的最大字符数。
+	ToolOutputMaxChars int32 `protobuf:"varint,5,opt,name=tool_output_max_chars,json=toolOutputMaxChars,proto3" json:"tool_output_max_chars,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *Data_AgentMemory) Reset() {
@@ -563,6 +578,27 @@ func (x *Data_AgentMemory) GetUserId() string {
 		return x.UserId
 	}
 	return ""
+}
+
+func (x *Data_AgentMemory) GetContextCompressThreshold() int64 {
+	if x != nil {
+		return x.ContextCompressThreshold
+	}
+	return 0
+}
+
+func (x *Data_AgentMemory) GetKeepRecentTurns() int32 {
+	if x != nil {
+		return x.KeepRecentTurns
+	}
+	return 0
+}
+
+func (x *Data_AgentMemory) GetToolOutputMaxChars() int32 {
+	if x != nil {
+		return x.ToolOutputMaxChars
+	}
+	return 0
 }
 
 type Runtime_RemoteAgent struct {
@@ -635,13 +671,14 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\x06server\x18\x01 \x01(\v2\x12.kratos.api.ServerR\x06server\x12$\n" +
 	"\x04data\x18\x02 \x01(\v2\x10.kratos.api.DataR\x04data\x12\x1e\n" +
 	"\x02ai\x18\x03 \x01(\v2\x0e.kratos.api.AIR\x02ai\x12-\n" +
-	"\aruntime\x18\x04 \x01(\v2\x13.kratos.api.RuntimeR\aruntime\"\x87\x01\n" +
+	"\aruntime\x18\x04 \x01(\v2\x13.kratos.api.RuntimeR\aruntime\"\xb0\x01\n" +
 	"\x02AI\x12-\n" +
-	"\x06openai\x18\x01 \x01(\v2\x15.kratos.api.AI.OpenAIR\x06openai\x1aR\n" +
+	"\x06openai\x18\x01 \x01(\v2\x15.kratos.api.AI.OpenAIR\x06openai\x1a{\n" +
 	"\x06OpenAI\x12\x17\n" +
 	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
-	"\x05model\x18\x03 \x01(\tR\x05model\"\x82\x02\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12'\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x03R\x0etimeoutSeconds\"\x82\x02\n" +
 	"\x06Server\x12+\n" +
 	"\x04http\x18\x01 \x01(\v2\x17.kratos.api.Server.HTTPR\x04http\x12+\n" +
 	"\x04grpc\x18\x02 \x01(\v2\x17.kratos.api.Server.GRPCR\x04grpc\x1aN\n" +
@@ -652,16 +689,19 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12\x18\n" +
-	"\atimeout\x18\x03 \x01(\x03R\atimeout\"\xf4\x01\n" +
+	"\atimeout\x18\x03 \x01(\x03R\atimeout\"\x92\x03\n" +
 	"\x04Data\x125\n" +
 	"\bdatabase\x18\x01 \x01(\v2\x19.kratos.api.Data.DatabaseR\bdatabase\x12?\n" +
 	"\fagent_memory\x18\x02 \x01(\v2\x1c.kratos.api.Data.AgentMemoryR\vagentMemory\x1a:\n" +
 	"\bDatabase\x12\x16\n" +
 	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x16\n" +
-	"\x06source\x18\x02 \x01(\tR\x06source\x1a8\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x1a\xd5\x01\n" +
 	"\vAgentMemory\x12\x10\n" +
 	"\x03dir\x18\x01 \x01(\tR\x03dir\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\tR\x06userId\"\x9b\x01\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\x12<\n" +
+	"\x1acontext_compress_threshold\x18\x03 \x01(\x03R\x18contextCompressThreshold\x12*\n" +
+	"\x11keep_recent_turns\x18\x04 \x01(\x05R\x0fkeepRecentTurns\x121\n" +
+	"\x15tool_output_max_chars\x18\x05 \x01(\x05R\x12toolOutputMaxChars\"\x9b\x01\n" +
 	"\aRuntime\x129\n" +
 	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x1aU\n" +
 	"\vRemoteAgent\x12\x14\n" +

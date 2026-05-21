@@ -12,6 +12,7 @@ type DelegationTraceStore interface {
 	AppendEvent(event DelegationEvent)
 	UpdatePlan(taskID string, steps []PlanStep)
 	ListSessions(limit int) []DelegationSession
+	UpdateContextUsage(taskID string, usage ContextUsageSnapshot, compress *ContextCompressResult)
 }
 
 type DelegationTraceSubscriber interface {
@@ -52,6 +53,8 @@ type DelegationSession struct {
 	Error         string            `json:"error,omitempty"`
 	CreatedAt     time.Time         `json:"created_at"`
 	UpdatedAt     time.Time         `json:"updated_at"`
-	Plan          []PlanStep        `json:"plan,omitempty"`
-	Events        []DelegationEvent `json:"events"`
+	Plan          []PlanStep          `json:"plan,omitempty"`
+	Events        []DelegationEvent   `json:"events"`
+	FileChanges   []SessionFileChange  `json:"file_changes,omitempty"`
+	ContextUsage  ContextUsageSnapshot `json:"context_usage,omitempty"`
 }

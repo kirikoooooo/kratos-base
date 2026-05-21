@@ -58,7 +58,7 @@ func advancePlan(steps []biz.PlanStep, event biz.DelegationEvent) []biz.PlanStep
 	case "delegate_local", "delegate_remote":
 		setPlanStepStatus(next, "delegate", "completed")
 		setFirstPending(next, "in_progress")
-	case "tool_write_file", "tool_exec_command", "handle_direct", "remote_execute_done":
+	case "tool_edit_file", "tool_write_file", "tool_exec_command", "handle_direct", "remote_execute_done":
 		setPlanStepStatus(next, "execute", "in_progress")
 	case "task_done", "message_done", "verification_done", "final_answer":
 		for i := range next {

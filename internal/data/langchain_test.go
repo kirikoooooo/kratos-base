@@ -17,7 +17,7 @@ import (
 )
 
 func TestAgentRuntimeSupportsGenericDefaultProfile(t *testing.T) {
-	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, nil, nil, log.NewStdLogger(io.Discard))
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, nil, nil, nil, log.NewStdLogger(io.Discard))
 
 	tests := []struct {
 		name  string
@@ -44,7 +44,7 @@ func TestAgentRuntimeSupportsGenericDefaultProfile(t *testing.T) {
 func TestAgentRuntimeReceiveTaskAcceptsDefaultProfile(t *testing.T) {
 	withFakeRuntimeLLM(t)
 
-	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, nil, nil, log.NewStdLogger(io.Discard))
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, nil, nil, nil, log.NewStdLogger(io.Discard))
 
 	result, err := runtime.ReceiveTask(context.Background(), &taskv1.TaskCommand{
 		TaskID: "task-default-profile",
@@ -68,7 +68,7 @@ func TestAgentRuntimeReceiveTaskAcceptsDefaultProfile(t *testing.T) {
 
 func TestToolCatalogReadWriteAndCommandTools(t *testing.T) {
 	trace := NewDelegationTraceStore()
-	tools, err := newLocalToolRuntime(trace)
+	tools, err := newLocalToolRuntime(trace, nil)
 	if err != nil {
 		t.Fatalf("newLocalToolRuntime() error = %v", err)
 	}
@@ -141,7 +141,7 @@ func TestToolCatalogReadWriteAndCommandTools(t *testing.T) {
 
 func TestReadFileReturnsDirectoryListing(t *testing.T) {
 	trace := NewDelegationTraceStore()
-	tools, err := newLocalToolRuntime(trace)
+	tools, err := newLocalToolRuntime(trace, nil)
 	if err != nil {
 		t.Fatalf("newLocalToolRuntime() error = %v", err)
 	}

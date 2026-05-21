@@ -1,6 +1,7 @@
 package data
 
 import (
+	"fmt"
 	"strings"
 
 	"kratos-demo/internal/biz"
@@ -84,14 +85,14 @@ func llmMessagesFromConversationTurns(turns []biz.ConversationTurn) []llms.Messa
 			if content := strings.TrimSpace(turn.Content); content != "" {
 				parts = append(parts, llms.TextContent{Text: content})
 			}
-			for _, call := range turn.ToolCalls {
-				parts = append(parts, llms.ToolCall{
-					ID: call.ID,
+			for idx, call := range turn.ToolCalls {
+				parts = append(parts, normalizeLLMToolCall(llms.ToolCall{
+					ID: ensureToolCallID(call.ID, call.Name, idx),
 					FunctionCall: &llms.FunctionCall{
 						Name:      call.Name,
 						Arguments: call.Arguments,
 					},
-				})
+				}))
 			}
 			if len(parts) == 0 {
 				continue
@@ -106,10 +107,14 @@ func llmMessagesFromConversationTurns(turns []biz.ConversationTurn) []llms.Messa
 			if name == "" && content == "" {
 				continue
 			}
+			toolCallID := strings.TrimSpace(turn.ToolCallID)
+			if toolCallID == "" {
+				toolCallID = ensureToolCallID("", name, 0)
+			}
 			messages = append(messages, llms.MessageContent{
 				Role: llms.ChatMessageTypeTool,
 				Parts: []llms.ContentPart{llms.ToolCallResponse{
-					ToolCallID: turn.ToolCallID,
+					ToolCallID: toolCallID,
 					Name:       name,
 					Content:    content,
 				}},
@@ -134,6 +139,30 @@ func textFromParts(parts []llms.ContentPart) string {
 		}
 	}
 	return builder.String()
+}
+
+func normalizeLLMToolCall(call llms.ToolCall) llms.ToolCall {
+	if strings.TrimSpace(call.Type) == "" {
+		call.Type = "function"
+	}
+	name := ""
+	if call.FunctionCall != nil {
+		name = call.FunctionCall.Name
+	}
+	call.ID = ensureToolCallID(call.ID, name, 0)
+	return call
+}
+
+func ensureToolCallID(id, toolName string, index int) string {
+	id = strings.TrimSpace(id)
+	if id != "" {
+		return id
+	}
+	toolName = strings.TrimSpace(toolName)
+	if toolName == "" {
+		toolName = "tool"
+	}
+	return fmt.Sprintf("call-%s-%d", toolName, index)
 }
 
 func buildLLMMessages(systemText string, turns []biz.ConversationTurn) []llms.MessageContent {

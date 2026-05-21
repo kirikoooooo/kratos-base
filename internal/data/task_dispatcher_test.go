@@ -264,7 +264,7 @@ func TestAgentRuntimeSendTaskViaActor(t *testing.T) {
 
 	logger := log.NewStdLogger(io.Discard)
 	trace := NewDelegationTraceStore()
-	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, nil, logger)
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, nil, nil, logger)
 	defer actorpkg.StopActor(runtime.PID())
 
 	_ = NewTaskDispatcher(NewTaskRepo(logger), runtime, trace, nil, logger)
@@ -292,7 +292,7 @@ func TestTaskDispatcherDispatchViaActor(t *testing.T) {
 	logger := log.NewStdLogger(io.Discard)
 	repo := NewTaskRepo(logger)
 	trace := NewDelegationTraceStore()
-	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, nil, logger)
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, nil, nil, logger)
 	defer actorpkg.StopActor(runtime.PID())
 
 	dispatcher := NewTaskDispatcher(repo, runtime, trace, nil, logger)
@@ -342,7 +342,7 @@ func TestDispatchSubTaskViaRemoteGRPC(t *testing.T) {
 
 	logger := log.NewStdLogger(io.Discard)
 	trace := NewDelegationTraceStore()
-	remoteRuntime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, nil, logger)
+	remoteRuntime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, nil, nil, logger)
 	remoteService := service.NewAgentRuntimeService(remoteRuntime)
 
 	grpcSrv := grpcserver.NewServer()
@@ -376,7 +376,7 @@ func TestDispatchSubTaskViaRemoteGRPC(t *testing.T) {
 			Target:  listener.Addr().String(),
 			Timeout: 3,
 		}},
-	}, trace, nil, logger)
+	}, trace, nil, nil, logger)
 
 	result, err := runtime.(*langChainAgentRuntime).dispatchSubTask(context.Background(), biz.TaskAgentCoder, "remote implement a minimal endpoint")
 	if err != nil {
@@ -537,7 +537,7 @@ func TestTaskFlowWritesResultAndTrace(t *testing.T) {
 	logger := log.NewStdLogger(io.Discard)
 	repo := NewTaskRepo(logger)
 	trace := NewDelegationTraceStore()
-	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, nil, logger)
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, nil, nil, logger)
 	defer actorpkg.StopActor(runtime.PID())
 
 	dispatcher := NewTaskDispatcher(repo, runtime, trace, nil, logger)
@@ -608,7 +608,7 @@ func TestDashboardStateIncludesToolTimeline(t *testing.T) {
 		Output:  "first phase summary",
 	}, nil)
 
-	svc := service.NewDashboardService(trace, nil, nil, &conf.Runtime{})
+	svc := service.NewDashboardService(trace, nil, nil, nil, &conf.Runtime{})
 	router := dashboardMux{ServeMux: http.NewServeMux()}
 	svc.Register(router)
 

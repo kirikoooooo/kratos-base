@@ -1,6 +1,8 @@
 package data
 
 import (
+	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -63,19 +65,32 @@ func NewAgentMemoryStore(dataConf *conf.Data, logger log.Logger) (biz.AgentMemor
 func NewAgentMemoryConfig(dataConf *conf.Data) biz.AgentMemoryConfig {
 	dir := defaultMemoryDir
 	userID := defaultMemoryUserID
+	threshold := 0
+	keepRecent := 0
+	toolOutputMax := 0
 	if dataConf != nil && dataConf.GetAgentMemory() != nil {
-		if configured := strings.TrimSpace(dataConf.GetAgentMemory().GetDir()); configured != "" {
+		am := dataConf.GetAgentMemory()
+		if configured := strings.TrimSpace(am.GetDir()); configured != "" {
 			dir = configured
 		}
-		if configuredUser := strings.TrimSpace(dataConf.GetAgentMemory().GetUserId()); configuredUser != "" {
+		if configuredUser := strings.TrimSpace(am.GetUserId()); configuredUser != "" {
 			userID = configuredUser
 		}
+		threshold = int(am.GetContextCompressThreshold())
+		keepRecent = int(am.GetKeepRecentTurns())
+		toolOutputMax = int(am.GetToolOutputMaxChars())
 	}
-	return biz.AgentMemoryConfig{Dir: dir, UserID: userID}
+	return biz.AgentMemoryConfig{
+		Dir:                      dir,
+		UserID:                   userID,
+		ContextCompressThreshold: threshold,
+		KeepRecentTurns:          keepRecent,
+		ToolOutputMaxChars:       toolOutputMax,
+	}
 }
 
 func (s *fileAgentMemoryStore) ensureLayout() error {
-	for _, sub := range []string{"users", "sessions", "conversations"} {
+	for _, sub := range []string{"users", "sessions", "conversations", "errors"} {
 		if err := os.MkdirAll(filepath.Join(s.baseDir, sub), 0o755); err != nil {
 			return fmt.Errorf("create memory dir %s: %w", sub, err)
 		}
@@ -161,6 +176,84 @@ func (s *fileAgentMemoryStore) sessionPath(sessionID string) string {
 
 func (s *fileAgentMemoryStore) conversationPath(sessionID string) string {
 	return filepath.Join(s.baseDir, "conversations", safeFileName(sessionID)+".json")
+}
+
+func (s *fileAgentMemoryStore) sessionErrorPath(sessionID string) string {
+	return filepath.Join(s.baseDir, "errors", safeFileName(sessionID)+".jsonl")
+}
+
+func (s *fileAgentMemoryStore) AppendSessionError(_ context.Context, record biz.SessionErrorRecord) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	record.SessionID = strings.TrimSpace(record.SessionID)
+	if record.SessionID == "" {
+		return errors.New("session id is required")
+	}
+	if record.Time.IsZero() {
+		record.Time = time.Now()
+	}
+	path := s.sessionErrorPath(record.SessionID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("ensure errors dir: %w", err)
+	}
+	raw, err := json.Marshal(record)
+	if err != nil {
+		return fmt.Errorf("encode session error: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return fmt.Errorf("open session error log %s: %w", path, err)
+	}
+	defer f.Close()
+	if _, err := f.Write(append(raw, '\n')); err != nil {
+		return fmt.Errorf("append session error log %s: %w", path, err)
+	}
+	if s.log != nil {
+		s.log.Infof("session error recorded: %s stage=%s", path, record.Stage)
+	}
+	return nil
+}
+
+func (s *fileAgentMemoryStore) ListSessionErrors(_ context.Context, sessionID string, limit int) ([]biz.SessionErrorRecord, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, errors.New("session id is required")
+	}
+	if limit <= 0 {
+		limit = 8
+	}
+	path := s.sessionErrorPath(sessionID)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("read session error log %s: %w", path, err)
+	}
+	var records []biz.SessionErrorRecord
+	scanner := bufio.NewScanner(bytes.NewReader(raw))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var rec biz.SessionErrorRecord
+		if err := json.Unmarshal([]byte(line), &rec); err != nil {
+			continue
+		}
+		records = append(records, rec)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, fmt.Errorf("scan session error log %s: %w", path, err)
+	}
+	if len(records) <= limit {
+		return records, nil
+	}
+	return records[len(records)-limit:], nil
 }
 
 func (s *fileAgentMemoryStore) LoadConversation(_ context.Context, sessionID string) (*biz.SessionConversation, error) {

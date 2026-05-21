@@ -14,6 +14,7 @@ var ProviderSet = wire.NewSet(
 	NewData,
 	NewTaskRepo,
 	NewDelegationTraceStore,
+	NewSessionChangeStore,
 	NewAgentMemoryStore,
 	NewAgentMemoryConfig,
 	NewAgentMemoryUsecaseProvider,

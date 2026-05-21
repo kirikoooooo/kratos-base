@@ -17,24 +17,27 @@ import (
 )
 
 type localToolRuntime struct {
-	root  string
-	trace biz.DelegationTraceStore
+	root    string
+	trace   biz.DelegationTraceStore
+	changes biz.SessionChangeStore
 }
 
-func newLocalToolRuntime(trace biz.DelegationTraceStore) (*localToolRuntime, error) {
+func newLocalToolRuntime(trace biz.DelegationTraceStore, changes biz.SessionChangeStore) (*localToolRuntime, error) {
 	root, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("get workspace root failed: %w", err)
 	}
 	return &localToolRuntime{
-		root:  root,
-		trace: trace,
+		root:    root,
+		trace:   trace,
+		changes: changes,
 	}, nil
 }
 
 func (r *localToolRuntime) bindings() []toolcatalog.BindingSpec {
 	return []toolcatalog.BindingSpec{
 		{Name: "read_file", Handler: r.readFile},
+		{Name: "edit_file", Handler: r.editFile},
 		{Name: "write_file", Handler: r.writeFile},
 		{Name: "exec_command", Handler: r.execCommand},
 	}
@@ -135,6 +138,148 @@ func (r *localToolRuntime) readDirectory(path, absPath string, start, end int) (
 	return builder.String(), nil
 }
 
+func (r *localToolRuntime) editFile(ctx context.Context, input string) (string, error) {
+	spec, err := parseEditFileInput(input)
+	if err != nil {
+		return "", err
+	}
+
+	absPath, err := r.resolvePath(spec.Path)
+	if err != nil {
+		return "", err
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("edit_file %s failed: file does not exist, use write_file to create new files", spec.Path)
+		}
+		return "", fmt.Errorf("edit_file %s failed: %w", spec.Path, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("edit_file %s failed: path is a directory", spec.Path)
+	}
+
+	raw, err := os.ReadFile(absPath)
+	if err != nil {
+		return "", fmt.Errorf("read file %s before edit failed: %w", spec.Path, err)
+	}
+	original := string(raw)
+
+	updated, detail, err := applyFileEdit(original, spec)
+	if err != nil {
+		return "", fmt.Errorf("edit_file %s failed: %w", spec.Path, err)
+	}
+	if updated == original {
+		return "", fmt.Errorf("edit_file %s failed: no changes applied", spec.Path)
+	}
+
+	if err := os.WriteFile(absPath, []byte(updated), 0o644); err != nil {
+		return "", fmt.Errorf("write file %s after edit failed: %w", spec.Path, err)
+	}
+
+	output := fmt.Sprintf("path: %s\noperation: %s\n%s\nbytes_before: %d\nbytes_after: %d",
+		spec.Path, spec.Operation, detail, len(original), len(updated))
+	r.recordFileChange(ctx, spec.Path, "edit_file", spec.Operation, detail, original, updated)
+	r.appendToolEvent(ctx, "tool_edit_file", "edit_file", spec.Path, output, "", 0)
+	return output, nil
+}
+
+func applyFileEdit(original string, spec editFileInput) (string, string, error) {
+	switch spec.Operation {
+	case "prepend":
+		if strings.TrimSpace(spec.NewString) == "" {
+			return "", "", errors.New("prepend requires new_string")
+		}
+		updated, detail, err := applyPrepend(original, spec.NewString)
+		if err != nil {
+			return "", "", err
+		}
+		return updated, detail, nil
+	case "insert_line":
+		if spec.Line <= 0 {
+			return "", "", errors.New("insert_line requires line >= 1")
+		}
+		if strings.TrimSpace(spec.NewString) == "" {
+			return "", "", errors.New("insert_line requires new_string")
+		}
+		updated, err := applyInsertLine(original, spec.Line, spec.NewString)
+		if err != nil {
+			return "", "", err
+		}
+		return updated, fmt.Sprintf("inserted content at line %d", spec.Line), nil
+	case "insert_after_line":
+		if spec.Line <= 0 {
+			return "", "", errors.New("insert_after_line requires line >= 1")
+		}
+		if strings.TrimSpace(spec.NewString) == "" {
+			return "", "", errors.New("insert_after_line requires new_string")
+		}
+		updated, err := applyInsertAfterLine(original, spec.Line, spec.NewString)
+		if err != nil {
+			return "", "", err
+		}
+		return updated, fmt.Sprintf("inserted content after line %d", spec.Line), nil
+	case "delete_line":
+		if spec.Line <= 0 {
+			return "", "", errors.New("delete_line requires line >= 1")
+		}
+		updated, err := applyDeleteLine(original, spec.Line)
+		if err != nil {
+			return "", "", err
+		}
+		return updated, fmt.Sprintf("deleted line %d", spec.Line), nil
+	case "delete_lines":
+		start, end := spec.lineSpan()
+		updated, err := applyDeleteLines(original, start, end)
+		if err != nil {
+			return "", "", err
+		}
+		return updated, fmt.Sprintf("deleted lines %d-%d", start, end), nil
+	case "replace_line":
+		if spec.Line <= 0 {
+			return "", "", errors.New("replace_line requires line >= 1")
+		}
+		updated, err := applyReplaceLine(original, spec.Line, spec.NewString)
+		if err != nil {
+			return "", "", err
+		}
+		return updated, fmt.Sprintf("replaced line %d", spec.Line), nil
+	case "replace_lines":
+		start, end := spec.lineSpan()
+		updated, err := applyReplaceLines(original, start, end, spec.NewString)
+		if err != nil {
+			return "", "", err
+		}
+		return updated, fmt.Sprintf("replaced lines %d-%d", start, end), nil
+	case "delete_string":
+		if strings.TrimSpace(spec.OldString) == "" {
+			return "", "", errors.New("delete_string requires old_string")
+		}
+		updated, count, err := applyDeleteString(original, spec.OldString, spec.ReplaceAll)
+		if err != nil {
+			return "", "", err
+		}
+		return updated, fmt.Sprintf("deleted %d occurrence(s)", count), nil
+	case "append":
+		if strings.TrimSpace(spec.NewString) == "" {
+			return "", "", errors.New("append requires new_string")
+		}
+		return applyAppendContent(original, spec.NewString), "appended new content to end of file", nil
+	case "search_replace", "":
+		if strings.TrimSpace(spec.OldString) == "" {
+			return "", "", errors.New("search_replace requires old_string; use append/prepend/insert_line for additions")
+		}
+		updated, count, err := applySearchReplace(original, spec.OldString, spec.NewString, spec.ReplaceAll)
+		if err != nil {
+			return "", "", err
+		}
+		return updated, fmt.Sprintf("replaced %d occurrence(s)", count), nil
+	default:
+		return "", "", fmt.Errorf("unsupported operation %q", spec.Operation)
+	}
+}
+
 func (r *localToolRuntime) writeFile(ctx context.Context, input string) (string, error) {
 	spec, err := parseWriteFileInput(input)
 	if err != nil {
@@ -146,6 +291,12 @@ func (r *localToolRuntime) writeFile(ctx context.Context, input string) (string,
 		return "", err
 	}
 
+	if _, err := os.Stat(absPath); err == nil {
+		return "", fmt.Errorf("file %s already exists; use edit_file to modify (search_replace/append), write_file only creates new files", spec.Path)
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat file %s failed: %w", spec.Path, err)
+	}
+
 	if err := os.MkdirAll(filepath.Dir(absPath), 0o755); err != nil {
 		return "", fmt.Errorf("create parent directory for %s failed: %w", spec.Path, err)
 	}
@@ -154,6 +305,7 @@ func (r *localToolRuntime) writeFile(ctx context.Context, input string) (string,
 	}
 
 	output := fmt.Sprintf("path: %s\nbytes_written: %d", spec.Path, len(spec.Content))
+	r.recordFileChange(ctx, spec.Path, "write_file", "create", "created new file", "", spec.Content)
 	r.appendToolEvent(ctx, "tool_write_file", "write_file", spec.Path, output, "", 0)
 	return output, nil
 }
@@ -217,6 +369,17 @@ func (r *localToolRuntime) resolvePath(raw string) (string, error) {
 	return absPath, nil
 }
 
+func (r *localToolRuntime) recordFileChange(ctx context.Context, path, toolName, operation, summary, before, after string) {
+	if r == nil || r.changes == nil {
+		return
+	}
+	taskID := currentTaskID(ctx)
+	if taskID == "" {
+		return
+	}
+	r.changes.RecordChange(taskID, path, toolName, operation, summary, before, after)
+}
+
 func (r *localToolRuntime) appendToolEvent(ctx context.Context, stage, toolName, input, output, errMsg string, exitCode int) {
 	if r == nil || r.trace == nil {
 		return
@@ -265,6 +428,62 @@ func parseReadFileInput(input string) (readFileInput, error) {
 	}
 	if strings.TrimSpace(spec.Path) == "" {
 		return readFileInput{}, errors.New("read_file path is required")
+	}
+	return spec, nil
+}
+
+type editFileInput struct {
+	Path       string `json:"path"`
+	Operation  string `json:"operation"`
+	Line       int    `json:"line"`
+	LineEnd    int    `json:"line_end"`
+	OldString  string `json:"old_string"`
+	NewString  string `json:"new_string"`
+	ReplaceAll bool   `json:"replace_all"`
+	Content    string `json:"content"`
+}
+
+func (s editFileInput) lineSpan() (int, int) {
+	start := s.Line
+	end := s.LineEnd
+	if start <= 0 {
+		start = 1
+	}
+	if end <= 0 {
+		end = start
+	}
+	return start, end
+}
+
+func parseEditFileInput(input string) (editFileInput, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return editFileInput{}, errors.New("edit_file input is empty")
+	}
+	var spec editFileInput
+	if err := json.Unmarshal([]byte(input), &spec); err != nil {
+		return editFileInput{}, fmt.Errorf("parse edit_file input failed: %w", err)
+	}
+	if strings.TrimSpace(spec.Path) == "" {
+		return editFileInput{}, errors.New("edit_file path is required")
+	}
+	spec.Operation = strings.TrimSpace(strings.ToLower(spec.Operation))
+	if spec.Operation == "" {
+		switch {
+		case strings.TrimSpace(spec.OldString) != "" && strings.TrimSpace(spec.NewString) == "":
+			spec.Operation = "delete_string"
+		case strings.TrimSpace(spec.OldString) != "":
+			spec.Operation = "search_replace"
+		case spec.Line > 0 && strings.TrimSpace(spec.NewString) != "":
+			spec.Operation = "insert_line"
+		case strings.TrimSpace(spec.NewString) != "":
+			spec.Operation = "append"
+		default:
+			spec.Operation = "search_replace"
+		}
+	}
+	if strings.TrimSpace(spec.NewString) == "" && strings.TrimSpace(spec.Content) != "" {
+		spec.NewString = spec.Content
 	}
 	return spec, nil
 }

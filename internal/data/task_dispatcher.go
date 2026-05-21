@@ -99,6 +99,14 @@ func (d *taskDispatcher) handle(ctx context.Context, cmd *taskv1.TaskCommand) {
 		if err := d.repo.Update(ctx, updated); err != nil {
 			d.log.Errorf("update task failed status failed: id=%s err=%v", cmd.TaskID, err)
 		}
+		if d.memory != nil {
+			_ = d.memory.RecordSessionError(ctx, biz.SessionErrorRecord{
+				SessionID: updated.ID,
+				Agent:     updated.Agent.String(),
+				Stage:     "task_failed",
+				Message:   execErr.Error(),
+			})
+		}
 		if d.trace != nil {
 			d.trace.AppendEvent(biz.DelegationEvent{
 				Time:    time.Now(),
