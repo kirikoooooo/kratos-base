@@ -1,197 +1,133 @@
 package actor
 
 import (
+	"errors"
 	"sync"
 	"testing"
 	"time"
-
-	"liteframe/pkg/util"
-
-	"github.com/pkg/errors"
-	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestRegisterActor(t *testing.T) {
 	root = newRootSystem()
-	Convey("Given RegisterActor", t, func() {
-		f := &fakeActor{
-			id:   1,
-			name: "fake",
-		}
-		f.pid = NewPID(f.id, f.name)
+	f := &fakeActor{id: 1, name: "fake"}
+	f.pid = NewPID(f.id, f.name)
 
-		Convey("When duplicate register", func() {
-			err := RegisterActor(f, 10)
-			So(err, ShouldBeNil)
+	if err := RegisterActor(f, 10); err != nil {
+		t.Fatalf("first RegisterActor() error = %v", err)
+	}
+	if err := RegisterActor(f, 100); err == nil {
+		t.Fatal("expected duplicate RegisterActor() to fail")
+	}
 
-			err = RegisterActor(f, 100)
-			So(err, ShouldNotBeNil)
-		})
-
-		Convey("When get by pid", func() {
-			Convey("When by register pid", func() {
-				gf, ok := root.get(f.PID())
-				So(gf, ShouldNotBeNil)
-				So(ok, ShouldBeTrue)
-			})
-
-			Convey("When by pid value", func() {
-				gf, ok := root.get(NewPID(f.id, f.name))
-				So(gf, ShouldNotBeNil)
-				So(ok, ShouldBeTrue)
-			})
-			Convey("When get non register pid", func() {
-				gf, ok := root.get(NewPID(2, "2"))
-				So(gf, ShouldBeNil)
-				So(ok, ShouldBeFalse)
-			})
-		})
-
-	})
+	if got, ok := root.get(f.PID()); got == nil || !ok {
+		t.Fatal("expected actor to be available by registered pid")
+	}
+	if got, ok := root.get(NewPID(f.id, f.name)); got == nil || !ok {
+		t.Fatal("expected actor to be available by equivalent pid value")
+	}
+	if got, ok := root.get(NewPID(2, "2")); got != nil || ok {
+		t.Fatal("expected unknown pid lookup to miss")
+	}
 }
 
 func TestSyncRequest(t *testing.T) {
 	root = newRootSystem()
 	f1 := &fakeActor{id: 1, name: "name"}
 	f1.pid = NewPID(f1.id, f1.name)
-	RegisterActor(f1, 10)
+	_ = RegisterActor(f1, 10)
+	_ = RegisterActor(&fakeResponse{}, 10)
+	_ = RegisterActor(&fakeTimeout{}, 10)
+	_ = RegisterActor(&fakeResponseErr{}, 10)
 
-	f2 := &fakeResponse{}
-	RegisterActor(f2, 10)
+	if resp := SyncRequest(f1.PID(), f1.PID(), &Message{}); !errors.Is(resp.Err, ErrSyncRequestSelf) {
+		t.Fatalf("expected ErrSyncRequestSelf, got %v", resp.Err)
+	}
 
-	fTimeout := &fakeTimeout{}
-	RegisterActor(fTimeout, 10)
+	if resp := SyncRequest(f1.PID(), NewPID(100000, "fake response"), &Message{}); resp.Err != nil {
+		t.Fatalf("expected normal sync request success, got %v", resp.Err)
+	}
 
-	fErr := &fakeResponseErr{}
-	RegisterActor(fErr, 10)
+	if resp := SyncRequest(f1.PID(), NewPID(2000000, "time out"), &Message{}); !errors.Is(resp.Err, ErrTimeOut) {
+		t.Fatalf("expected ErrTimeOut, got %v", resp.Err)
+	}
 
-	Convey("Given SyncRequest", t, func() {
+	if resp := SyncRequest(f1.PID(), NewPID(30000, "response error"), &Message{}); resp.Err == nil {
+		t.Fatal("expected response error from fakeResponseErr")
+	}
 
-		Convey("When sync request self", func() {
-
-			resp := SyncRequest(f1.PID(), f1.PID(), &Message{})
-			So(errors.Is(resp.Err, ErrSyncRequestSelf), ShouldBeTrue)
-		})
-
-		Convey("When sync request normal response", func() {
-			resp := SyncRequest(f1.PID(), f2.PID(), &Message{})
-			So(resp.Err, ShouldBeNil)
-		})
-
-		Convey("When sync request time out", func() {
-			resp := SyncRequest(f1.PID(), fTimeout.PID(), &Message{})
-			So(errors.Is(resp.Err, ErrTimeOut), ShouldBeTrue)
-		})
-
-		Convey("When sync response error", func() {
-			resp := SyncRequest(f1.PID(), fErr.PID(), &Message{})
-			So(resp.Err, ShouldNotBeNil)
-		})
-		Convey("When sync request non register", func() {
-			pid := NewPID(3, "non register")
-			resp := SyncRequest(f1.PID(), pid, &Message{})
-			So(resp.Err, ShouldNotBeNil)
-		})
-	})
+	if resp := SyncRequest(f1.PID(), NewPID(3, "non register"), &Message{}); resp.Err == nil {
+		t.Fatal("expected error for non-registered pid")
+	}
 }
 
 func TestAsyncRequest(t *testing.T) {
 	root = newRootSystem()
 	f1 := &fakeActor{id: 1, name: "name"}
 	f1.pid = NewPID(f1.id, f1.name)
-	RegisterActor(f1, 10)
+	_ = RegisterActor(f1, 10)
+	_ = RegisterActor(&fakeResponse{}, 10)
+	_ = RegisterActor(&fakeTimeout{}, 10)
+	_ = RegisterActor(&fakeResponseErr{}, 10)
 
-	f2 := &fakeResponse{}
-	RegisterActor(f2, 10)
+	tests := []struct {
+		name    string
+		target  PID
+		wantErr bool
+	}{
+		{name: "self", target: f1.PID(), wantErr: false},
+		{name: "normal", target: NewPID(100000, "fake response"), wantErr: false},
+		{name: "timeout actor still replies", target: NewPID(2000000, "time out"), wantErr: false},
+		{name: "response error", target: NewPID(30000, "response error"), wantErr: true},
+		{name: "missing actor", target: NewPID(3, "non register"), wantErr: true},
+	}
 
-	fTimeout := &fakeTimeout{}
-	RegisterActor(fTimeout, 10)
-
-	fErr := &fakeResponseErr{}
-	RegisterActor(fErr, 10)
-
-	Convey("Given AsyncRequest", t, func() {
-
-		Convey("When async request self", func(c C) {
-
-			AsyncRequest(f1.PID(), f1.PID(), &Message{}, func(msg RespMessage) {
-				c.So(msg.Err, ShouldBeNil)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			done := make(chan RespMessage, 1)
+			AsyncRequest(f1.PID(), tt.target, &Message{}, func(msg RespMessage) {
+				done <- msg
 			})
-
+			select {
+			case msg := <-done:
+				if tt.wantErr && msg.Err == nil {
+					t.Fatal("expected async request error")
+				}
+				if !tt.wantErr && msg.Err != nil {
+					t.Fatalf("unexpected async request error: %v", msg.Err)
+				}
+			case <-time.After(5 * time.Second):
+				t.Fatal("timeout waiting async request callback")
+			}
 		})
-
-		Convey("When async request normal response", func(c C) {
-			AsyncRequest(f1.PID(), f2.PID(), &Message{}, func(msg RespMessage) {
-				c.So(msg.Err, ShouldBeNil)
-			})
-
-		})
-
-		Convey("When async request time out", func(c C) {
-			AsyncRequest(f1.PID(), fTimeout.PID(), &Message{}, func(msg RespMessage) {
-				c.So(msg.Err, ShouldNotBeNil)
-			})
-		})
-
-		Convey("When async response error", func(c C) {
-			AsyncRequest(f1.PID(), fErr.PID(), &Message{}, func(msg RespMessage) {
-				c.So(msg.Err, ShouldNotBeNil)
-			})
-		})
-		Convey("When async request non register", func(c C) {
-			pid := NewPID(3, "non register")
-			AsyncRequest(f1.PID(), pid, &Message{}, func(msg RespMessage) {
-				c.So(msg.Err, ShouldNotBeNil)
-			})
-		})
-	})
-
+	}
 }
 
 func TestStop(t *testing.T) {
 	root = newRootSystem()
 	f1 := &fakeActor{id: 1, name: "name"}
 	f1.pid = NewPID(f1.id, f1.name)
-	RegisterActor(f1, 10)
+	_ = RegisterActor(f1, 10)
 
-	f2 := &fakeResponse{}
-	RegisterActor(f2, 10)
+	StopActor(f1.PID())
+	if got, ok := root.get(f1.PID()); got != nil || ok {
+		t.Fatal("expected stopped actor to be removed")
+	}
 
-	fTimeout := &fakeTimeout{}
-	RegisterActor(fTimeout, 10)
+	if err := RegisterActor(f1, 10); err != nil {
+		t.Fatalf("expected stopped actor to be re-registerable: %v", err)
+	}
+	if got, ok := root.get(f1.PID()); got == nil || !ok {
+		t.Fatal("expected actor to be present after re-register")
+	}
 
-	fErr := &fakeResponseErr{}
-	RegisterActor(fErr, 10)
-
-	Convey("Given StopActor", t, func() {
-
-		Convey("When Stop exist", func() {
-			StopActor(f1.PID())
-			fg, ok := root.get(f1.PID())
-			So(fg, ShouldBeNil)
-			So(ok, ShouldBeFalse)
-
-			Convey("When register stoped", func() {
-				RegisterActor(f1, 10)
-				fg, ok := root.get(f1.PID())
-				So(fg, ShouldNotBeNil)
-				So(ok, ShouldBeTrue)
-			})
-
-		})
-
-		Convey("When stop not exist", func() {
-			pid := NewPID(4, "not register")
-			StopActor(pid)
-			fg, ok := root.get(f1.PID())
-			So(fg, ShouldNotBeNil)
-			So(ok, ShouldBeTrue)
-
-			fg, ok = root.get(pid)
-			So(fg, ShouldBeNil)
-			So(ok, ShouldBeFalse)
-		})
-	})
+	missing := NewPID(4, "not register")
+	StopActor(missing)
+	if got, ok := root.get(f1.PID()); got == nil || !ok {
+		t.Fatal("expected existing actor to remain after stopping missing pid")
+	}
+	if got, ok := root.get(missing); got != nil || ok {
+		t.Fatal("expected missing pid to remain absent")
+	}
 }
 
 func BenchmarkAsyncRequest(b *testing.B) {
@@ -199,8 +135,8 @@ func BenchmarkAsyncRequest(b *testing.B) {
 	req := newFakeActor(200000)
 	worker := newFakeActor(200001)
 
-	RegisterActor(req, 10000000)
-	RegisterActor(worker, 10000000)
+	_ = RegisterActor(req, 10000000)
+	_ = RegisterActor(worker, 10000000)
 	wt := sync.WaitGroup{}
 
 	b.ResetTimer()
@@ -257,8 +193,8 @@ func TestAsyncRequestB(t *testing.T) {
 	req := newFakeActor(200000)
 	worker := newFakeActor(200001)
 
-	RegisterActor(req, 100000)
-	RegisterActor(worker, 100000)
+	_ = RegisterActor(req, 100000)
+	_ = RegisterActor(worker, 100000)
 	wt := sync.WaitGroup{}
 	wt.Add(1000000)
 
@@ -277,9 +213,9 @@ func TestAsyncRequestB(t *testing.T) {
 func TestTransactionCommit(t *testing.T) {
 	root = newRootSystem()
 	req1 := NewFakeTxnActorReq(6000000)
-	RegisterActor(req1, 10)
+	_ = RegisterActor(req1, 10)
 	resp1 := NewFakeTxnActorResponse(6000001)
-	RegisterActor(resp1, 10)
+	_ = RegisterActor(resp1, 10)
 
 	defPid := NewPID(1, "default")
 	beg := time.Now()
@@ -293,24 +229,23 @@ func TestTransactionCommit(t *testing.T) {
 func BenchmarkTransaction(b *testing.B) {
 	root = newRootSystem()
 	req1 := NewFakeTxnActorReq(6000000)
-	RegisterActor(req1, 10)
+	_ = RegisterActor(req1, 10)
 	resp1 := NewFakeTxnActorResponse(6000001)
-	RegisterActor(resp1, 10)
+	_ = RegisterActor(resp1, 10)
 
 	defPid := NewPID(1, "default")
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		SyncRequest(defPid, req1.pid, &Message{Data: resp1.pid, Id: failTxnMsgId})
 	}
-
 }
 
 func TestTransaction(t *testing.T) {
 	root = newRootSystem()
 	req1 := NewFakeTxnActorReq(6000000)
-	RegisterActor(req1, 10)
+	_ = RegisterActor(req1, 10)
 	resp1 := NewFakeTxnActorResponse(6000001)
-	RegisterActor(resp1, 10)
+	_ = RegisterActor(resp1, 10)
 
 	initMap := map[string]int{
 		"init1": 1,
@@ -318,28 +253,39 @@ func TestTransaction(t *testing.T) {
 	}
 	defPid := NewPID(1, "default")
 
-	Convey("Given Transaction", t, func() {
-		Convey("When timeout", func() {
-
-			util.DeepCopy(&req1.m, initMap)
-			SyncRequest(defPid, req1.pid, &Message{Id: timeoutTxnMsgId, Data: resp1.PID()})
-			So(req1.m, ShouldResemble, initMap)
-
-		})
-		Convey("When txn failed", func() {
-
-			util.DeepCopy(&req1.m, initMap)
-			SyncRequest(defPid, req1.pid, &Message{Id: failTxnMsgId, Data: resp1.PID()})
-			So(req1.m, ShouldResemble, initMap)
-
-		})
-		Convey("When txn success", func() {
-
-			util.DeepCopy(&req1.m, initMap)
-			SyncRequest(defPid, req1.pid, &Message{Id: successTxnMsgId, Data: resp1.PID()})
-			So(req1.m, ShouldNotResemble, initMap)
-
-		})
+	t.Run("timeout", func(t *testing.T) {
+		mustDeepCopy(&req1.m, initMap)
+		SyncRequest(defPid, req1.pid, &Message{Id: timeoutTxnMsgId, Data: resp1.PID()})
+		if !mapsEqual(req1.m, initMap) {
+			t.Fatalf("map after timeout = %#v, want %#v", req1.m, initMap)
+		}
 	})
 
+	t.Run("txn failed", func(t *testing.T) {
+		mustDeepCopy(&req1.m, initMap)
+		SyncRequest(defPid, req1.pid, &Message{Id: failTxnMsgId, Data: resp1.PID()})
+		if !mapsEqual(req1.m, initMap) {
+			t.Fatalf("map after failure = %#v, want %#v", req1.m, initMap)
+		}
+	})
+
+	t.Run("txn success", func(t *testing.T) {
+		mustDeepCopy(&req1.m, initMap)
+		SyncRequest(defPid, req1.pid, &Message{Id: successTxnMsgId, Data: resp1.PID()})
+		if mapsEqual(req1.m, initMap) {
+			t.Fatalf("map after success = %#v, expected mutation", req1.m)
+		}
+	})
+}
+
+func mapsEqual(a, b map[string]int) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for k, v := range a {
+		if b[k] != v {
+			return false
+		}
+	}
+	return true
 }

@@ -1,13 +1,32 @@
 package data
 
 import (
+	"context"
+
+	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
 )
 
-var ProviderSet = wire.NewSet(NewData, NewTaskRepo, NewDelegationTraceStore, NewAgentRuntime, NewTaskDispatcher)
+var ProviderSet = wire.NewSet(
+	NewData,
+	NewTaskRepo,
+	NewDelegationTraceStore,
+	NewAgentMemoryStore,
+	NewAgentMemoryConfig,
+	NewAgentMemoryUsecaseProvider,
+	NewAgentRuntime,
+	NewTaskDispatcher,
+)
+
+func NewAgentMemoryUsecaseProvider(store biz.AgentMemoryStore, cfg biz.AgentMemoryConfig) (*biz.AgentMemoryUsecase, error) {
+	if err := BootstrapUserMemoryIfEmpty(context.Background(), store, cfg.UserID, ""); err != nil {
+		return nil, err
+	}
+	return biz.NewAgentMemoryUsecase(store, cfg), nil
+}
 
 type Data struct {
 	db  *conf.Data_Database

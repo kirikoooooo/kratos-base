@@ -7,10 +7,15 @@ import (
 )
 
 type DelegationTraceStore interface {
-	StartTask(taskID string, agent TaskAgent, prompt string, status TaskStatus)
+	StartTask(taskID string, agent TaskAgent, status TaskStatus)
 	UpdateTask(taskID string, status TaskStatus, result *taskv1.TaskResult, err error)
 	AppendEvent(event DelegationEvent)
+	UpdatePlan(taskID string, steps []PlanStep)
 	ListSessions(limit int) []DelegationSession
+}
+
+type DelegationTraceSubscriber interface {
+	Subscribe() (<-chan []DelegationSession, func())
 }
 
 type DelegationEvent struct {
@@ -24,17 +29,29 @@ type DelegationEvent struct {
 	Error         string    `json:"error,omitempty"`
 	PromptPreview string    `json:"prompt_preview,omitempty"`
 	DurationMS    int64     `json:"duration_ms,omitempty"`
+	ToolName      string    `json:"tool_name,omitempty"`
+	ToolInput     string    `json:"tool_input,omitempty"`
+	ToolOutput    string    `json:"tool_output,omitempty"`
+	ExitCode      int       `json:"exit_code,omitempty"`
+}
+
+type PlanStep struct {
+	ID          string `json:"id"`
+	Title       string `json:"title"`
+	Status      string `json:"status"`
+	Description string `json:"description,omitempty"`
 }
 
 type DelegationSession struct {
-	TaskID        string            `json:"task_id"`
-	RootAgent     string            `json:"root_agent"`
-	Prompt        string            `json:"prompt"`
-	Status        string            `json:"status"`
+	TaskID              string            `json:"task_id"`
+	RootAgent           string            `json:"root_agent"`
+	ConversationPreview string            `json:"conversation_preview,omitempty"`
+	Status              string            `json:"status"`
 	ResultSummary string            `json:"result_summary,omitempty"`
 	ResultOutput  string            `json:"result_output,omitempty"`
 	Error         string            `json:"error,omitempty"`
 	CreatedAt     time.Time         `json:"created_at"`
 	UpdatedAt     time.Time         `json:"updated_at"`
+	Plan          []PlanStep        `json:"plan,omitempty"`
 	Events        []DelegationEvent `json:"events"`
 }

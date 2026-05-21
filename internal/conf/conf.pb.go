@@ -188,6 +188,7 @@ func (x *Server) GetGrpc() *Server_GRPC {
 type Data struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Database      *Data_Database         `protobuf:"bytes,1,opt,name=database,proto3" json:"database,omitempty"`
+	AgentMemory   *Data_AgentMemory      `protobuf:"bytes,2,opt,name=agent_memory,json=agentMemory,proto3" json:"agent_memory,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -229,10 +230,16 @@ func (x *Data) GetDatabase() *Data_Database {
 	return nil
 }
 
+func (x *Data) GetAgentMemory() *Data_AgentMemory {
+	if x != nil {
+		return x.AgentMemory
+	}
+	return nil
+}
+
 type Runtime struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Remotes       []*Runtime_RemoteAgent `protobuf:"bytes,1,rep,name=remotes,proto3" json:"remotes,omitempty"`
-	Sandbox       *Runtime_Sandbox       `protobuf:"bytes,2,opt,name=sandbox,proto3" json:"sandbox,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -270,13 +277,6 @@ func (*Runtime) Descriptor() ([]byte, []int) {
 func (x *Runtime) GetRemotes() []*Runtime_RemoteAgent {
 	if x != nil {
 		return x.Remotes
-	}
-	return nil
-}
-
-func (x *Runtime) GetSandbox() *Runtime_Sandbox {
-	if x != nil {
-		return x.Sandbox
 	}
 	return nil
 }
@@ -513,6 +513,58 @@ func (x *Data_Database) GetSource() string {
 	return ""
 }
 
+type Data_AgentMemory struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Dir           string                 `protobuf:"bytes,1,opt,name=dir,proto3" json:"dir,omitempty"`
+	UserId        string                 `protobuf:"bytes,2,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Data_AgentMemory) Reset() {
+	*x = Data_AgentMemory{}
+	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Data_AgentMemory) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Data_AgentMemory) ProtoMessage() {}
+
+func (x *Data_AgentMemory) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Data_AgentMemory.ProtoReflect.Descriptor instead.
+func (*Data_AgentMemory) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 1}
+}
+
+func (x *Data_AgentMemory) GetDir() string {
+	if x != nil {
+		return x.Dir
+	}
+	return ""
+}
+
+func (x *Data_AgentMemory) GetUserId() string {
+	if x != nil {
+		return x.UserId
+	}
+	return ""
+}
+
 type Runtime_RemoteAgent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Agent         string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
@@ -524,7 +576,7 @@ type Runtime_RemoteAgent struct {
 
 func (x *Runtime_RemoteAgent) Reset() {
 	*x = Runtime_RemoteAgent{}
-	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_internal_conf_conf_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -536,7 +588,7 @@ func (x *Runtime_RemoteAgent) String() string {
 func (*Runtime_RemoteAgent) ProtoMessage() {}
 
 func (x *Runtime_RemoteAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_internal_conf_conf_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -573,90 +625,6 @@ func (x *Runtime_RemoteAgent) GetTimeout() int64 {
 	return 0
 }
 
-type Runtime_Sandbox struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Enabled       bool                   `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
-	ApiKey        string                 `protobuf:"bytes,2,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
-	BaseUrl       string                 `protobuf:"bytes,3,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
-	Template      string                 `protobuf:"bytes,4,opt,name=template,proto3" json:"template,omitempty"`
-	Timeout       int64                  `protobuf:"varint,5,opt,name=timeout,proto3" json:"timeout,omitempty"`
-	SkillCommand  string                 `protobuf:"bytes,6,opt,name=skill_command,json=skillCommand,proto3" json:"skill_command,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Runtime_Sandbox) Reset() {
-	*x = Runtime_Sandbox{}
-	mi := &file_internal_conf_conf_proto_msgTypes[10]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Runtime_Sandbox) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Runtime_Sandbox) ProtoMessage() {}
-
-func (x *Runtime_Sandbox) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[10]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Runtime_Sandbox.ProtoReflect.Descriptor instead.
-func (*Runtime_Sandbox) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 1}
-}
-
-func (x *Runtime_Sandbox) GetEnabled() bool {
-	if x != nil {
-		return x.Enabled
-	}
-	return false
-}
-
-func (x *Runtime_Sandbox) GetApiKey() string {
-	if x != nil {
-		return x.ApiKey
-	}
-	return ""
-}
-
-func (x *Runtime_Sandbox) GetBaseUrl() string {
-	if x != nil {
-		return x.BaseUrl
-	}
-	return ""
-}
-
-func (x *Runtime_Sandbox) GetTemplate() string {
-	if x != nil {
-		return x.Template
-	}
-	return ""
-}
-
-func (x *Runtime_Sandbox) GetTimeout() int64 {
-	if x != nil {
-		return x.Timeout
-	}
-	return 0
-}
-
-func (x *Runtime_Sandbox) GetSkillCommand() string {
-	if x != nil {
-		return x.SkillCommand
-	}
-	return ""
-}
-
 var File_internal_conf_conf_proto protoreflect.FileDescriptor
 
 const file_internal_conf_conf_proto_rawDesc = "" +
@@ -684,26 +652,22 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12\x18\n" +
-	"\atimeout\x18\x03 \x01(\x03R\atimeout\"y\n" +
+	"\atimeout\x18\x03 \x01(\x03R\atimeout\"\xf4\x01\n" +
 	"\x04Data\x125\n" +
-	"\bdatabase\x18\x01 \x01(\v2\x19.kratos.api.Data.DatabaseR\bdatabase\x1a:\n" +
+	"\bdatabase\x18\x01 \x01(\v2\x19.kratos.api.Data.DatabaseR\bdatabase\x12?\n" +
+	"\fagent_memory\x18\x02 \x01(\v2\x1c.kratos.api.Data.AgentMemoryR\vagentMemory\x1a:\n" +
 	"\bDatabase\x12\x16\n" +
 	"\x06driver\x18\x01 \x01(\tR\x06driver\x12\x16\n" +
-	"\x06source\x18\x02 \x01(\tR\x06source\"\x87\x03\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x1a8\n" +
+	"\vAgentMemory\x12\x10\n" +
+	"\x03dir\x18\x01 \x01(\tR\x03dir\x12\x17\n" +
+	"\auser_id\x18\x02 \x01(\tR\x06userId\"\x9b\x01\n" +
 	"\aRuntime\x129\n" +
-	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x125\n" +
-	"\asandbox\x18\x02 \x01(\v2\x1b.kratos.api.Runtime.SandboxR\asandbox\x1aU\n" +
+	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x1aU\n" +
 	"\vRemoteAgent\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x18\n" +
-	"\atimeout\x18\x03 \x01(\x03R\atimeout\x1a\xb2\x01\n" +
-	"\aSandbox\x12\x18\n" +
-	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x17\n" +
-	"\aapi_key\x18\x02 \x01(\tR\x06apiKey\x12\x19\n" +
-	"\bbase_url\x18\x03 \x01(\tR\abaseUrl\x12\x1a\n" +
-	"\btemplate\x18\x04 \x01(\tR\btemplate\x12\x18\n" +
-	"\atimeout\x18\x05 \x01(\x03R\atimeout\x12#\n" +
-	"\rskill_command\x18\x06 \x01(\tR\fskillCommandB Z\x1ekratos-demo/internal/conf;confb\x06proto3"
+	"\atimeout\x18\x03 \x01(\x03R\atimeoutB Z\x1ekratos-demo/internal/conf;confb\x06proto3"
 
 var (
 	file_internal_conf_conf_proto_rawDescOnce sync.Once
@@ -728,8 +692,8 @@ var file_internal_conf_conf_proto_goTypes = []any{
 	(*Server_HTTP)(nil),         // 6: kratos.api.Server.HTTP
 	(*Server_GRPC)(nil),         // 7: kratos.api.Server.GRPC
 	(*Data_Database)(nil),       // 8: kratos.api.Data.Database
-	(*Runtime_RemoteAgent)(nil), // 9: kratos.api.Runtime.RemoteAgent
-	(*Runtime_Sandbox)(nil),     // 10: kratos.api.Runtime.Sandbox
+	(*Data_AgentMemory)(nil),    // 9: kratos.api.Data.AgentMemory
+	(*Runtime_RemoteAgent)(nil), // 10: kratos.api.Runtime.RemoteAgent
 }
 var file_internal_conf_conf_proto_depIdxs = []int32{
 	2,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
@@ -740,8 +704,8 @@ var file_internal_conf_conf_proto_depIdxs = []int32{
 	6,  // 5: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
 	7,  // 6: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
 	8,  // 7: kratos.api.Data.database:type_name -> kratos.api.Data.Database
-	9,  // 8: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
-	10, // 9: kratos.api.Runtime.sandbox:type_name -> kratos.api.Runtime.Sandbox
+	9,  // 8: kratos.api.Data.agent_memory:type_name -> kratos.api.Data.AgentMemory
+	10, // 9: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
 	10, // [10:10] is the sub-list for method output_type
 	10, // [10:10] is the sub-list for method input_type
 	10, // [10:10] is the sub-list for extension type_name

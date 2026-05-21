@@ -1,21 +1,35 @@
 # ActorAgentAlliance
 
-这是一个基于 `Kratos` 的 Go 示例项目，目标是验证一条可运行的 AI Agent 链路：把 AI Agent 接入现有游戏 `actor` 框架，并逐步演进到支持 A2A（Agent to Agent）任务委派。长期目标是完成一个多Agent协同的智能游戏ai。
+这是一个基于 `Kratos` 的 Go 示例项目。当前阶段的主目标不再是继续扩展游戏垂类 agent，而是先做成一个类似 Claude Code 的通用 agent 底座：先跑通本地任务接入、工具调用、代码库操作和结果回写，后续再考虑 Actor 化执行、多 Agent 编排与 A2A 演进。
 
-当前项目重点不是做完整业务，而是先搭出最小闭环：
+当前项目重点不是做完整业务，而是先搭出通用 agent 的最小闭环：
 
 - 通过 HTTP 创建任务
-- 通过 actor 调度任务执行
-- 由 router / coder / reviewer agent 处理任务
-- 在 router 中把子任务委派给本地或远端 agent
-- 用轻量 dashboard 观察和验证 A2A 委派链路
+- 由本地 agent runtime 处理任务
+- 先打通代码库读取、工具调用、任务回写等通用能力
+- 先把任务链路做成可观察、可验证的本地闭环
 
 ## 项目目标
 
-- 把 AI Agent 以低侵入方式接入游戏 actor 框架
-- 验证 actor 模型下的任务投递、执行和回写链路
-- 验证 router 驱动的 A2A 子任务委派是否真实生效
-- 为后续接入更多 agent、工具链和游戏业务模块打基础
+- 把 AI Agent 以低侵入方式接入 `Kratos` 运行时
+- 先实现类似 Claude Code 的通用 coding agent 基础能力
+- 验证任务投递、执行、工具调用和结果回写链路
+- 为后续演进到 Actor Mailbox、多 agent 协同、A2A 委派和游戏业务模块打基础
+
+## 第一阶段范围
+
+- 单机、本地、通用的 agent runtime，而不是 actor-first 或 multi-agent-first 的产品形态
+- 通过 HTTP 完成任务创建、执行触发、结果查询与状态回写
+- 打通代码库读取、工具调用、结果整理和基础链路可观测
+- 当前仓库里的 `actor`、`router / coder / reviewer`、A2A 验证链路可以继续保留，但在第一阶段只视为兼容性实现或过渡性验证，不作为产品边界定义
+
+## 明确延后到后续阶段
+
+- 分布式运行与跨节点调度
+- 多 Agent 编排与统一 coordinator
+- 远程委派和完整 A2A 协议抽象
+- 复杂 dashboard 和实时链路大盘
+- 具体游戏业务 actor 接入与业务消息模型整合
 
 ## 启动
 
@@ -33,6 +47,8 @@ go run ./cmd/kratos-demo -conf ./configs
 
 ## Todo
 
+说明：下面“已完成”里的 actor / A2A / 多角色能力，表示仓库当前已经存在的技术验证资产，不等于第一阶段产品目标；第一阶段仍以本地通用 agent 闭环为准。
+
 ### 已完成
 
 - [x] `Kratos` HTTP / gRPC 服务基础结构
@@ -46,19 +62,24 @@ go run ./cmd/kratos-demo -conf ./configs
 - [x] A2A 委派链路 trace 记录
 - [x] A2A 委派链路验证 dashboard
 
-### 计划中
+### 计划中（第一阶段）
 
-- [ ] 持久化任务和委派 trace
-- [ ] dashboard 实时刷新和更完整的链路时间线
+- [ ] 持久化任务和执行 trace
 - [ ] 更丰富的 agent 工具调用与结果展示
-- [ ] 更完整的 A2A 协议抽象，而不只依赖当前 gRPC 直连
-- [ ] 接入具体游戏业务 actor 与业务消息模型
 - [ ] 补充监控、超时、重试和审计能力
 - [ ] 改善 AI 配置和密钥管理方式
 
+### 后续阶段
+
+- [ ] dashboard 实时刷新和更完整的链路时间线
+- [ ] 更完整的 A2A 协议抽象，而不只依赖当前 gRPC 直连
+- [ ] 接入具体游戏业务 actor 与业务消息模型
+
 ## 多 Agent 协同畅想计划
 
-项目后续希望从当前的 `router / coder / reviewer` 验证链路，逐步演进到一个更贴近游戏生产场景的一主多从、多 Agent 协同范式。核心思路是引入一个统一调度的 `coordinator`，负责目标拆解、上下文编排、异步收发、状态汇总与回写；再由多个面向不同职责的从属 Agent 并行协作。
+以下内容是后续阶段，不属于第一阶段交付范围。第一阶段不会以这些能力作为当前里程碑目标。
+
+项目后续希望从当前的本地通用 runtime 和过渡性的 `router / coder / reviewer` 验证链路，逐步演进到一个更贴近游戏生产场景的一主多从、多 Agent 协同范式。核心思路是引入一个统一调度的 `coordinator`，负责目标拆解、上下文编排、异步收发、状态汇总与回写；再由多个面向不同职责的从属 Agent 并行协作。
 
 ### 角色设想
 
@@ -122,4 +143,3 @@ go run ./cmd/kratos-demo -conf ./configs
 - 支持多 Agent 并发执行、超时控制、失败重试、取消和优先级调度
 - 在 dashboard 中展示主任务与子 Agent 的异步协作链路
 - 逐步把这套范式从 demo 演化成适配真实游戏研发流程的 Agent 协作底座
-

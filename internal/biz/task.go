@@ -27,6 +27,8 @@ const (
 	TaskStatusDone    TaskStatus = "done"
 	TaskStatusFailed  TaskStatus = "failed"
 
+	TaskAgentDefault  TaskAgent = "default"
+	TaskAgentGeneric  TaskAgent = "generic"
 	TaskAgentRouter   TaskAgent = "router"
 	TaskAgentCoder    TaskAgent = "coder"
 	TaskAgentReviewer TaskAgent = "reviewer"
@@ -107,7 +109,11 @@ func (uc *TaskUsecase) Get(ctx context.Context, id string) (*Task, error) {
 func normalizeAgent(agent string) TaskAgent {
 	agent = strings.TrimSpace(strings.ToLower(agent))
 	if agent == "" {
-		return TaskAgentRouter
+		return TaskAgentDefault
+	}
+	switch TaskAgent(agent) {
+	case TaskAgentDefault, TaskAgentGeneric:
+		return TaskAgentDefault
 	}
 	return TaskAgent(agent)
 }

@@ -2,6 +2,7 @@ package data
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -14,21 +15,26 @@ import (
 	toolcatalog "kratos-demo/third_party/tools"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/tmc/langchaingo/agents"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
-	langtools "github.com/tmc/langchaingo/tools"
 	grpcclient "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
-	defaultOpenAIModel   = "gpt-4o-mini"
-	defaultRemoteTimeout = 8 * time.Second
-	runtimeActorPID      = 9001
+	defaultOpenAIModel      = "gpt-4o-mini"
+	defaultRemoteTimeout    = 8 * time.Second
+	runtimeActorPID         = 9001
+	maxToolLoopIterations   = 12
+	maxToolCorrectionRounds = 5
+	maxExecCommandAttempts  = 3
 )
 
 var newRuntimeLLM = func(config *conf.AI, logger *log.Helper) (llms.Model, error) {
+	return newRuntimeLLMForPurpose(config, logger, "")
+}
+
+var newRuntimeLLMForPurpose = func(config *conf.AI, logger *log.Helper, purpose string) (llms.Model, error) {
 	if config == nil {
 		return nil, errors.New("ai config is nil")
 	}
@@ -42,6 +48,9 @@ var newRuntimeLLM = func(config *conf.AI, logger *log.Helper) (llms.Model, error
 	model := strings.TrimSpace(config.GetOpenai().GetModel())
 	if model == "" {
 		model = defaultOpenAIModel
+	}
+	if purpose == "function_calling" {
+		model = normalizeFunctionCallingModel(model)
 	}
 
 	options := []openai.Option{
@@ -66,16 +75,22 @@ type langChainAgentRuntime struct {
 	log            *log.Helper
 	pid            actorpkg.PID
 	trace          biz.DelegationTraceStore
-	sandbox        sandboxExecutor
+	memory         *biz.AgentMemoryUsecase
+	localTools     *localToolRuntime
+	localToolsErr  error
 	toolCatalog    *toolcatalog.Catalog
 	toolCatalogErr error
 }
 
-func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace biz.DelegationTraceStore, logger log.Logger) biz.AgentRuntime {
+func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace biz.DelegationTraceStore, memory *biz.AgentMemoryUsecase, logger log.Logger) biz.AgentRuntime {
 	helper := log.NewHelper(logger)
 	catalog, err := toolcatalog.DefaultCatalog()
 	if err != nil {
 		helper.Warnf("load embedded tool catalog failed: %v", err)
+	}
+	localTools, localToolsErr := newLocalToolRuntime(trace)
+	if localToolsErr != nil {
+		helper.Warnf("create local tool runtime failed: %v", localToolsErr)
 	}
 	return &langChainAgentRuntime{
 		config:         config,
@@ -83,7 +98,9 @@ func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace biz.Del
 		log:            helper,
 		pid:            actorpkg.NewPID(runtimeActorPID, "langchain-runtime"),
 		trace:          trace,
-		sandbox:        newSandboxExecutor(runtimeConfig, helper),
+		memory:         memory,
+		localTools:     localTools,
+		localToolsErr:  localToolsErr,
 		toolCatalog:    catalog,
 		toolCatalogErr: err,
 	}
@@ -118,7 +135,7 @@ func (r *langChainAgentRuntime) Name() string {
 
 func (r *langChainAgentRuntime) Supports(agent biz.TaskAgent) bool {
 	switch agent {
-	case biz.TaskAgentRouter, biz.TaskAgentCoder, biz.TaskAgentReviewer:
+	case biz.TaskAgentDefault, biz.TaskAgentGeneric, biz.TaskAgentRouter, biz.TaskAgentCoder, biz.TaskAgentReviewer:
 		return true
 	default:
 		return false
@@ -126,7 +143,18 @@ func (r *langChainAgentRuntime) Supports(agent biz.TaskAgent) bool {
 }
 
 func (r *langChainAgentRuntime) Execute(ctx context.Context, agent biz.TaskAgent, prompt string) (*taskv1.TaskResult, error) {
-	switch agent {
+	normalized := normalizeRuntimeAgent(agent)
+	ctx = withTaskAgent(ctx, normalized)
+	if r.memory != nil {
+		if sessionID := currentTaskID(ctx); sessionID != "" {
+			if err := r.memory.PrepareForTask(ctx, sessionID, normalized); err != nil {
+				r.log.Warnf("prepare agent memory failed: %v", err)
+			}
+		}
+	}
+	switch normalized {
+	case biz.TaskAgentDefault:
+		return r.runDefault(ctx, prompt)
 	case biz.TaskAgentRouter:
 		return r.runRouter(ctx, prompt)
 	case biz.TaskAgentCoder:
@@ -142,7 +170,7 @@ func (r *langChainAgentRuntime) ReceiveTask(ctx context.Context, cmd *taskv1.Tas
 	if cmd == nil {
 		return nil, errors.New("task command is nil")
 	}
-	return r.Execute(withTaskID(ctx, cmd.TaskID), biz.TaskAgent(cmd.Agent), cmd.Prompt)
+	return r.Execute(withTaskID(ctx, cmd.TaskID), normalizeRuntimeAgent(biz.TaskAgent(cmd.Agent)), cmd.Prompt)
 }
 
 func (r *langChainAgentRuntime) SendTask(_ context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
@@ -191,7 +219,7 @@ func (r *langChainAgentRuntime) asyncRequest(from actorpkg.PID, message *actorpk
 }
 
 func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
-	modelClient, err := r.newLLM()
+	modelClient, err := r.newFunctionCallingLLM()
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +240,7 @@ func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*
 			return formatTaskResult("ReviewerAgent", result), nil
 		}},
 	}
-	agentTools, err := r.buildManagedTools(r.appendSandboxBindings(bindings))
+	toolset, err := r.buildManagedToolset(bindings)
 	if err != nil {
 		return nil, err
 	}
@@ -223,21 +251,34 @@ func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*
 		"当任务同时包含开发与审查时，优先调用 coder_agent，再根据结果调用 reviewer_agent。",
 		"当你已经拿到足够的工具结果后，再直接输出最终中文结论。",
 	}
-	if r.hasSandboxTools() {
-		promptLines = append(promptLines, "如需要在 E2B Code Sandbox 中执行系统命令或 skills，请调用 sandbox_exec 或 sandbox_skill，并基于返回结果继续决策。")
-	}
 	systemPrompt := strings.Join(promptLines, "\n")
 
-	agent := agents.NewOpenAIFunctionsAgent(
-		modelClient,
-		agentTools,
-		agents.NewOpenAIOption().WithSystemMessage(systemPrompt),
-	)
-	return r.runFunctionsAgent(ctx, agent, prompt, "router agent 已通过 LangChainGo function calling 完成编排")
+	return r.runToolCallingLoop(ctx, modelClient, toolset, systemPrompt, prompt, "router agent 已通过本地 tool calling 完成编排")
+}
+
+func (r *langChainAgentRuntime) runDefault(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
+	modelClient, err := r.newFunctionCallingLLM()
+	if err != nil {
+		return nil, err
+	}
+
+	toolset, err := r.buildManagedToolset(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	systemPrompt := strings.Join([]string{
+		"你是一个通用代码代理运行时，负责直接理解任务并给出可执行结果。",
+		"当任务涉及查看仓库、修改文件或执行本地验证时，优先调用可用函数，不要假设工具已经执行。",
+		"可用工具覆盖读文件、写文件和执行受限验证命令；拿到工具结果后，再用中文给出真实总结。",
+		"如果任务不需要工具，也可以直接回答，但不能编造执行结果。",
+	}, "\n")
+
+	return r.runToolCallingLoop(ctx, modelClient, toolset, systemPrompt, prompt, "default agent profile 已通过通用 runtime 完成任务")
 }
 
 func (r *langChainAgentRuntime) runCoder(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
-	modelClient, err := r.newLLM()
+	modelClient, err := r.newFunctionCallingLLM()
 	if err != nil {
 		return nil, err
 	}
@@ -258,7 +299,7 @@ func (r *langChainAgentRuntime) runCoder(ctx context.Context, prompt string) (*t
 			return formatTaskResult("ReviewerAgent", result), nil
 		}},
 	}
-	agentTools, err := r.buildManagedTools(r.appendSandboxBindings(bindings))
+	toolset, err := r.buildManagedToolset(bindings)
 	if err != nil {
 		return nil, err
 	}
@@ -270,17 +311,18 @@ func (r *langChainAgentRuntime) runCoder(ctx context.Context, prompt string) (*t
 		"当你已经产出实现方案且需要补充审查意见时，可以调用 reviewer_agent。",
 		"如果任务可以直接回答，就直接输出最终中文结果。",
 	}
-	if r.hasSandboxTools() {
-		promptLines = append(promptLines, "如需要进入 E2B Code Sandbox 执行系统命令、验证实现、运行构建或调用 skills，请使用 sandbox_exec 或 sandbox_skill。")
-	}
 	systemPrompt := strings.Join(promptLines, "\n")
 
-	agent := agents.NewOpenAIFunctionsAgent(
-		modelClient,
-		agentTools,
-		agents.NewOpenAIOption().WithSystemMessage(systemPrompt),
-	)
-	return r.runFunctionsAgent(ctx, agent, prompt, "coder agent 已通过 LangChainGo function calling 完成生成")
+	return r.runToolCallingLoop(ctx, modelClient, toolset, systemPrompt, prompt, "coder agent 已通过本地 tool calling 完成生成")
+}
+
+func normalizeRuntimeAgent(agent biz.TaskAgent) biz.TaskAgent {
+	switch biz.TaskAgent(strings.TrimSpace(strings.ToLower(agent.String()))) {
+	case "", biz.TaskAgentDefault, biz.TaskAgentGeneric:
+		return biz.TaskAgentDefault
+	default:
+		return biz.TaskAgent(strings.TrimSpace(strings.ToLower(agent.String())))
+	}
 }
 
 func (r *langChainAgentRuntime) runReviewer(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
@@ -295,9 +337,21 @@ func (r *langChainAgentRuntime) newLLM() (llms.Model, error) {
 	return newRuntimeLLM(r.config, r.log)
 }
 
-func (r *langChainAgentRuntime) buildManagedTools(bindings []toolcatalog.BindingSpec) ([]langtools.Tool, error) {
+func (r *langChainAgentRuntime) newFunctionCallingLLM() (llms.Model, error) {
+	return newRuntimeLLMForPurpose(r.config, r.log, "function_calling")
+}
+
+type managedToolset struct {
+	Tools    []llms.Tool
+	Handlers map[string]toolcatalog.Handler
+}
+
+func (r *langChainAgentRuntime) buildManagedToolset(bindings []toolcatalog.BindingSpec) (*managedToolset, error) {
 	if r == nil {
 		return nil, errors.New("agent runtime is nil")
+	}
+	if r.localToolsErr != nil {
+		return nil, fmt.Errorf("local tool runtime unavailable: %w", r.localToolsErr)
 	}
 	if r.toolCatalogErr != nil {
 		return nil, fmt.Errorf("tool catalog unavailable: %w", r.toolCatalogErr)
@@ -305,50 +359,259 @@ func (r *langChainAgentRuntime) buildManagedTools(bindings []toolcatalog.Binding
 	if r.toolCatalog == nil {
 		return nil, errors.New("tool catalog is nil")
 	}
-	return r.toolCatalog.BindLangChainTools(bindings)
-}
-
-func (r *langChainAgentRuntime) hasSandboxTools() bool {
-	return r != nil && r.sandbox != nil && r.sandbox.Enabled()
-}
-
-func (r *langChainAgentRuntime) appendSandboxBindings(bindings []toolcatalog.BindingSpec) []toolcatalog.BindingSpec {
-	if !r.hasSandboxTools() {
-		return bindings
+	if r.localTools != nil {
+		bindings = append(bindings, r.localTools.bindings()...)
 	}
-	return append(bindings,
-		toolcatalog.BindingSpec{Name: "sandbox_exec", Handler: func(toolCtx context.Context, input string) (string, error) {
-			return r.sandbox.ExecuteCommand(toolCtx, input)
-		}},
-		toolcatalog.BindingSpec{Name: "sandbox_skill", Handler: func(toolCtx context.Context, input string) (string, error) {
-			skillName, args, err := parseSkillInvocation(input)
-			if err != nil {
-				return "", err
-			}
-			return r.sandbox.ExecuteSkill(toolCtx, skillName, args)
-		}},
-	)
-}
-
-func (r *langChainAgentRuntime) runFunctionsAgent(ctx context.Context, agent agents.Agent, prompt, summary string) (*taskv1.TaskResult, error) {
-	executor := agents.NewExecutor(agent, agents.WithMaxIterations(4))
-
-	values, err := executor.Call(ctx, map[string]any{"input": prompt})
+	names := make([]string, 0, len(bindings))
+	handlers := make(map[string]toolcatalog.Handler, len(bindings))
+	for _, binding := range bindings {
+		name := strings.TrimSpace(binding.Name)
+		if name == "" {
+			return nil, errors.New("tool binding name is empty")
+		}
+		if binding.Handler == nil {
+			return nil, fmt.Errorf("tool handler is nil: %s", name)
+		}
+		names = append(names, name)
+		handlers[name] = binding.Handler
+	}
+	tools, err := r.toolCatalog.AsLLMTools(names)
 	if err != nil {
-		r.log.Warnf("function calling executor call failed: %v", err)
-		return nil, fmt.Errorf("function calling executor call failed: %w", err)
+		return nil, err
 	}
-
-	output, _ := values["output"].(string)
-	output = strings.TrimSpace(output)
-	if output == "" {
-		return nil, errors.New("react executor returned empty output")
-	}
-
-	return &taskv1.TaskResult{
-		Summary: summary,
-		Output:  output,
+	return &managedToolset{
+		Tools:    tools,
+		Handlers: handlers,
 	}, nil
+}
+
+func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelClient llms.Model, toolset *managedToolset, systemPrompt, prompt, summary string) (*taskv1.TaskResult, error) {
+	if modelClient == nil {
+		return nil, errors.New("llm model is nil")
+	}
+	systemText := strings.TrimSpace(systemPrompt) + "\n如果 read_file 因路径不存在失败，先修正路径；必要时可调用 exec_command 在 Windows 工作区搜索文件位置，但 exec_command 全任务最多尝试 3 次。"
+	if r.memory != nil {
+		if block := strings.TrimSpace(r.memory.RenderPromptContext(ctx, currentTaskID(ctx))); block != "" {
+			systemText += "\n\n## Agent Memory（提示词调优）\n" + block
+		}
+	}
+
+	sessionID := currentTaskID(ctx)
+	turns := []biz.ConversationTurn{}
+	if r.memory != nil && sessionID != "" {
+		if conv, err := r.memory.LoadConversation(ctx, sessionID); err == nil && conv != nil {
+			turns = conv.Turns
+		}
+	}
+	if len(turns) == 0 {
+		if initial := strings.TrimSpace(prompt); initial != "" {
+			turns = []biz.ConversationTurn{{Role: biz.ConversationRoleHuman, Content: initial}}
+		}
+	}
+	messages := buildLLMMessages(systemText, turns)
+	correctionRounds := 0
+	toolAttempts := map[string]int{}
+
+	for i := 0; i < maxToolLoopIterations; i++ {
+		callOptions := []llms.CallOption{}
+		if toolset != nil && len(toolset.Tools) > 0 {
+			callOptions = append(callOptions, llms.WithTools(toolset.Tools), llms.WithToolChoice("auto"))
+		}
+		response, err := modelClient.GenerateContent(ctx, messages, callOptions...)
+		if err != nil {
+			r.log.Warnf("tool calling loop failed: %v", err)
+			return nil, fmt.Errorf("tool calling loop failed: %w", err)
+		}
+		if response == nil || len(response.Choices) == 0 {
+			return nil, errors.New("tool calling loop returned empty response")
+		}
+
+		choice := response.Choices[0]
+		output := strings.TrimSpace(choice.Content)
+		toolCalls := normalizeToolCalls(choice)
+		if len(toolCalls) == 0 {
+			if output == "" {
+				return nil, errors.New("tool calling loop returned empty output")
+			}
+			messages = append(messages, llms.TextParts(llms.ChatMessageTypeAI, output))
+			r.persistConversation(ctx, sessionID, messages)
+			return &taskv1.TaskResult{
+				Summary: summary,
+				Output:  output,
+			}, nil
+		}
+
+		assistantParts := make([]llms.ContentPart, 0, len(toolCalls)+1)
+		if output != "" {
+			assistantParts = append(assistantParts, llms.TextContent{Text: output})
+		}
+		for _, tc := range toolCalls {
+			assistantParts = append(assistantParts, tc)
+		}
+		messages = append(messages, llms.MessageContent{
+			Role:  llms.ChatMessageTypeAI,
+			Parts: assistantParts,
+		})
+
+		roundFailed := false
+		var lastToolErr error
+		for _, tc := range toolCalls {
+			toolName := ""
+			if tc.FunctionCall != nil {
+				toolName = strings.TrimSpace(tc.FunctionCall.Name)
+			}
+			if toolName != "" {
+				toolAttempts[toolName]++
+			}
+			if toolName == "exec_command" && toolAttempts[toolName] > maxExecCommandAttempts {
+				return nil, fmt.Errorf("tool %s fallback exhausted after %d attempts", toolName, maxExecCommandAttempts)
+			}
+
+			observation, err := callManagedTool(ctx, toolset, tc)
+			if err != nil {
+				roundFailed = true
+				lastToolErr = err
+				observation = formatToolErrorObservation(tc, observation, err, correctionRounds+1)
+			} else if r.memory != nil && toolName != "" {
+				if recordErr := r.memory.RecordSessionToolUsage(ctx, currentTaskID(ctx), toolName); recordErr != nil {
+					r.log.Warnf("record session tool usage failed: %v", recordErr)
+				}
+			}
+			messages = append(messages, llms.MessageContent{
+				Role: llms.ChatMessageTypeTool,
+				Parts: []llms.ContentPart{llms.ToolCallResponse{
+					ToolCallID: tc.ID,
+					Name:       tc.FunctionCall.Name,
+					Content:    observation,
+				}},
+			})
+			if err != nil && toolName == "exec_command" && toolAttempts[toolName] >= maxExecCommandAttempts {
+				return nil, fmt.Errorf("exec_command fallback exhausted after %d attempts: %w", maxExecCommandAttempts, err)
+			}
+		}
+		r.persistConversation(ctx, sessionID, messages)
+		if roundFailed {
+			correctionRounds++
+			if correctionRounds >= maxToolCorrectionRounds {
+				if lastToolErr != nil {
+					return nil, fmt.Errorf("tool self-correction exhausted after %d rounds: %w", maxToolCorrectionRounds, lastToolErr)
+				}
+				return nil, fmt.Errorf("tool self-correction exhausted after %d rounds", maxToolCorrectionRounds)
+			}
+			continue
+		}
+		correctionRounds = 0
+	}
+	return nil, errors.New("tool calling loop exceeded max iterations")
+}
+
+func formatToolErrorObservation(call llms.ToolCall, output string, err error, attempt int) string {
+	name := ""
+	if call.FunctionCall != nil {
+		name = strings.TrimSpace(call.FunctionCall.Name)
+	}
+	parts := []string{
+		"status: error",
+		"tool: " + name,
+		fmt.Sprintf("attempt: %d/%d", attempt, maxToolCorrectionRounds),
+		"error: " + strings.TrimSpace(err.Error()),
+		"请根据这个错误修正参数、路径或工具选择后重试。",
+	}
+	if trimmed := strings.TrimSpace(output); trimmed != "" {
+		parts = append(parts, "partial_output:\n"+trimmed)
+	}
+	return strings.Join(parts, "\n")
+}
+
+func normalizeToolCalls(choice *llms.ContentChoice) []llms.ToolCall {
+	if choice == nil {
+		return nil
+	}
+	if len(choice.ToolCalls) > 0 {
+		return choice.ToolCalls
+	}
+	if choice.FuncCall == nil {
+		return nil
+	}
+	return []llms.ToolCall{{
+		ID:   fmt.Sprintf("legacy-func-%d", time.Now().UnixNano()),
+		Type: "function",
+		FunctionCall: &llms.FunctionCall{
+			Name:      choice.FuncCall.Name,
+			Arguments: choice.FuncCall.Arguments,
+		},
+	}}
+}
+
+func callManagedTool(ctx context.Context, toolset *managedToolset, call llms.ToolCall) (string, error) {
+	if toolset == nil {
+		return "", errors.New("managed toolset is nil")
+	}
+	if call.FunctionCall == nil {
+		return "", errors.New("tool call function payload is nil")
+	}
+	handler, ok := toolset.Handlers[strings.TrimSpace(call.FunctionCall.Name)]
+	if !ok {
+		return "", fmt.Errorf("tool handler not found: %s", call.FunctionCall.Name)
+	}
+	input, err := normalizeToolInput(call.FunctionCall.Arguments)
+	if err != nil {
+		return "", err
+	}
+	output, callErr := handler(ctx, input)
+	if callErr != nil {
+		if strings.TrimSpace(output) != "" {
+			return output, fmt.Errorf("tool %s failed: %w", call.FunctionCall.Name, callErr)
+		}
+		return "", fmt.Errorf("tool %s failed: %w", call.FunctionCall.Name, callErr)
+	}
+	return output, nil
+}
+
+func normalizeToolInput(arguments string) (string, error) {
+	arguments = strings.TrimSpace(arguments)
+	if arguments == "" {
+		return "", nil
+	}
+	var payload struct {
+		Input string `json:"input"`
+	}
+	if strings.HasPrefix(arguments, "{") && json.Unmarshal([]byte(arguments), &payload) == nil {
+		if strings.TrimSpace(payload.Input) != "" {
+			return strings.TrimSpace(payload.Input), nil
+		}
+	}
+	var legacy struct {
+		Arg1 string `json:"__arg1"`
+	}
+	if strings.HasPrefix(arguments, "{") && json.Unmarshal([]byte(arguments), &legacy) == nil {
+		if strings.TrimSpace(legacy.Arg1) != "" {
+			return strings.TrimSpace(legacy.Arg1), nil
+		}
+	}
+	return arguments, nil
+}
+
+func (r *langChainAgentRuntime) runFunctionsAgent(_ context.Context, _ any, _, _ string) (*taskv1.TaskResult, error) {
+	return nil, errors.New("runFunctionsAgent is no longer used")
+}
+
+func (r *langChainAgentRuntime) persistConversation(ctx context.Context, sessionID string, messages []llms.MessageContent) {
+	if r.memory == nil || strings.TrimSpace(sessionID) == "" {
+		return
+	}
+	turns := conversationTurnsFromLLM(messages)
+	if len(turns) == 0 {
+		return
+	}
+	conv := &biz.SessionConversation{
+		SessionID: sessionID,
+		Agent:     currentTaskAgent(ctx).String(),
+		Turns:     turns,
+	}
+	if err := r.memory.SaveConversation(ctx, conv); err != nil {
+		r.log.Warnf("persist conversation failed: session=%s err=%v", sessionID, err)
+	}
 }
 
 func (r *langChainAgentRuntime) runPlainLLMTask(ctx context.Context, systemPrompt, prompt, summary string) (*taskv1.TaskResult, error) {
@@ -372,6 +635,18 @@ func (r *langChainAgentRuntime) runPlainLLMTask(ctx context.Context, systemPromp
 	output = strings.TrimSpace(output)
 	if output == "" {
 		return nil, errors.New("plain llm returned empty output")
+	}
+
+	sessionID := currentTaskID(ctx)
+	if r.memory != nil && sessionID != "" {
+		_ = r.memory.SaveConversation(ctx, &biz.SessionConversation{
+			SessionID: sessionID,
+			Agent:     currentTaskAgent(ctx).String(),
+			Turns: []biz.ConversationTurn{
+				{Role: biz.ConversationRoleHuman, Content: strings.TrimSpace(prompt)},
+				{Role: biz.ConversationRoleAI, Content: output},
+			},
+		})
 	}
 
 	return &taskv1.TaskResult{
@@ -517,8 +792,13 @@ func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID str
 	if taskID == "" {
 		taskID = fmt.Sprintf("verify-%d", time.Now().UnixNano())
 	}
+	if r.memory != nil {
+		if err := r.memory.StartConversation(ctx, taskID, biz.TaskAgentRouter, prompt); err != nil {
+			return nil, fmt.Errorf("start conversation memory: %w", err)
+		}
+	}
 	if r.trace != nil {
-		r.trace.StartTask(taskID, biz.TaskAgentRouter, prompt, biz.TaskStatusRunning)
+		r.trace.StartTask(taskID, biz.TaskAgentRouter, biz.TaskStatusRunning)
 		r.trace.AppendEvent(biz.DelegationEvent{
 			Time:          time.Now(),
 			TaskID:        taskID,
@@ -557,6 +837,7 @@ func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID str
 }
 
 type taskIDContextKey struct{}
+type taskAgentContextKey struct{}
 
 func withTaskID(ctx context.Context, taskID string) context.Context {
 	return context.WithValue(ctx, taskIDContextKey{}, taskID)
@@ -568,4 +849,30 @@ func currentTaskID(ctx context.Context) string {
 	}
 	taskID, _ := ctx.Value(taskIDContextKey{}).(string)
 	return taskID
+}
+
+func withTaskAgent(ctx context.Context, agent biz.TaskAgent) context.Context {
+	return context.WithValue(ctx, taskAgentContextKey{}, agent)
+}
+
+func currentTaskAgent(ctx context.Context) biz.TaskAgent {
+	if ctx == nil {
+		return biz.TaskAgentDefault
+	}
+	agent, _ := ctx.Value(taskAgentContextKey{}).(biz.TaskAgent)
+	if agent.IsEmpty() {
+		return biz.TaskAgentDefault
+	}
+	return agent
+}
+
+func normalizeFunctionCallingModel(model string) string {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		return defaultOpenAIModel
+	}
+	if strings.HasPrefix(strings.ToLower(model), "gpt-5") {
+		return defaultOpenAIModel
+	}
+	return model
 }

@@ -11,6 +11,9 @@ data:
   database:
     driver: memory
     source: demo
+  agent_memory:
+    dir: .kratos/agent
+    user_id: default
 ai:
   openai:
     api_key: "sk-9LAwFafTcQgGzTmo01XVzYk7LmVBj5Ba8zb85twR88TsyKRO"
@@ -21,10 +24,3 @@ runtime:
     - agent: coder
       target: 127.0.0.1:9001
       timeout: 8
-  sandbox:
-    enabled: false
-    api_key: ""
-    base_url: "https://api.e2b.dev"
-    template: "base"
-    timeout: 60
-    skill_command: "skills run"

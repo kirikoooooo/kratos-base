@@ -1,10 +1,9 @@
 package actor
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
-
-	"liteframe/pkg/util"
 )
 
 const (
@@ -108,7 +107,7 @@ func (f fakeTxnActorReq) PID() PID {
 func (f *fakeTxnActorReq) Process(msg *Message) {
 	if msg.Id == beforeTxnMsgId {
 		m := make(map[string]int)
-		util.DeepCopy(m, f.m)
+		mustDeepCopy(m, f.m)
 		msg.Response(RespMessage{
 			Err:  nil,
 			Data: m,
@@ -208,7 +207,7 @@ func (f *fakeTxnActorResponse) Process(msg *Message) {
 
 	if msg.Id == beforeTxnMsgId {
 		d := &ObjData{}
-		util.DeepCopy(d, f.obj)
+		mustDeepCopy(d, f.obj)
 		msg.Response(RespMessage{
 			Err:  nil,
 			Data: d,
@@ -253,4 +252,14 @@ func (f *fakeTxnActorResponse) Process(msg *Message) {
 }
 
 func (fakeTxnActorResponse) OnStop() {
+}
+
+func mustDeepCopy(dst, src any) {
+	raw, err := json.Marshal(src)
+	if err != nil {
+		panic(err)
+	}
+	if err := json.Unmarshal(raw, dst); err != nil {
+		panic(err)
+	}
 }

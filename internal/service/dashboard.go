@@ -19,6 +19,7 @@ import (
 type DashboardService struct {
 	trace   biz.DelegationTraceStore
 	runtime biz.AgentRuntime
+	memory  *biz.AgentMemoryUsecase
 	config  *conf.Runtime
 	page    *template.Template
 	mu      sync.RWMutex
@@ -38,13 +39,17 @@ type dashboardMessageRequest struct {
 	Prompt string `json:"prompt"`
 }
 
-func NewDashboardService(trace biz.DelegationTraceStore, runtime biz.AgentRuntime, config *conf.Runtime) *DashboardService {
+func NewDashboardService(trace biz.DelegationTraceStore, runtime biz.AgentRuntime, memory *biz.AgentMemoryUsecase, config *conf.Runtime) *DashboardService {
 	return &DashboardService{
 		trace:   trace,
 		runtime: runtime,
+		memory:  memory,
 		config:  config,
 		page:    template.Must(template.New("dashboard").Parse(dashboardTemplate)),
 		agents: map[biz.TaskAgent]*dashboardAgentState{
+			biz.TaskAgentDefault: {
+				Agent: biz.TaskAgentDefault.String(),
+			},
 			biz.TaskAgentRouter: {
 				Agent: biz.TaskAgentRouter.String(),
 			},
@@ -60,6 +65,7 @@ func (s *DashboardService) Register(mux interface {
 }) {
 	mux.HandleFunc("/debug/a2a", s.handleDashboard)
 	mux.HandleFunc("/debug/a2a/state", s.handleState)
+	mux.HandleFunc("/debug/a2a/stream", s.handleStream)
 	mux.HandleFunc("/debug/a2a/agent/start", s.handleStartAgent)
 	mux.HandleFunc("/debug/a2a/message", s.handleMessage)
 	mux.HandleFunc("/debug/a2a/verify", s.handleVerify)
@@ -77,6 +83,51 @@ func (s *DashboardService) handleState(w http.ResponseWriter, _ *http.Request) {
 		"remotes":     s.remoteStates(),
 		"sessions":    s.sessions(),
 	})
+}
+
+func (s *DashboardService) handleStream(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "streaming is not supported"})
+		return
+	}
+
+	subscriber, ok := s.trace.(biz.DelegationTraceSubscriber)
+	if !ok {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{"error": "trace store does not support subscriptions"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/event-stream")
+	w.Header().Set("Cache-Control", "no-cache")
+	w.Header().Set("Connection", "keep-alive")
+
+	ch, cancel := subscriber.Subscribe()
+	defer cancel()
+
+	ctx := r.Context()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case sessions, ok := <-ch:
+			if !ok {
+				return
+			}
+			payload := map[string]any{
+				"server_time": time.Now().Format(time.RFC3339),
+				"agents":      s.agentStates(),
+				"remotes":     s.remoteStates(),
+				"sessions":    sessions,
+			}
+			raw, err := json.Marshal(payload)
+			if err != nil {
+				continue
+			}
+			_, _ = fmt.Fprintf(w, "event: state\ndata: %s\n\n", raw)
+			flusher.Flush()
+		}
+	}
 }
 
 func (s *DashboardService) handleStartAgent(w http.ResponseWriter, r *http.Request) {
@@ -185,14 +236,22 @@ func (s *DashboardService) sessions() []biz.DelegationSession {
 	if s.trace == nil {
 		return nil
 	}
-	return s.trace.ListSessions(12)
+	sessions := s.trace.ListSessions(12)
+	if s.memory == nil {
+		return sessions
+	}
+	ctx := context.Background()
+	for i := range sessions {
+		sessions[i].ConversationPreview = s.memory.ConversationPreview(ctx, sessions[i].TaskID)
+	}
+	return sessions
 }
 
 func (s *DashboardService) agentStates() []dashboardAgentState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	agents := []biz.TaskAgent{biz.TaskAgentRouter, biz.TaskAgentCoder}
+	agents := []biz.TaskAgent{biz.TaskAgentDefault, biz.TaskAgentRouter, biz.TaskAgentCoder}
 	result := make([]dashboardAgentState, 0, len(agents))
 	for _, agent := range agents {
 		state, ok := s.agents[agent]
@@ -243,8 +302,13 @@ func (s *DashboardService) rememberAgentTask(agent biz.TaskAgent, taskID, prompt
 }
 
 func (s *DashboardService) runConversation(ctx context.Context, taskID string, agent biz.TaskAgent, prompt string) (*taskv1.TaskResult, error) {
+	if s.memory != nil {
+		if err := s.memory.StartConversation(ctx, taskID, agent, prompt); err != nil {
+			return nil, fmt.Errorf("start conversation memory: %w", err)
+		}
+	}
 	if s.trace != nil {
-		s.trace.StartTask(taskID, agent, prompt, biz.TaskStatusRunning)
+		s.trace.StartTask(taskID, agent, biz.TaskStatusRunning)
 		s.trace.AppendEvent(biz.DelegationEvent{
 			Time:          time.Now(),
 			TaskID:        taskID,
@@ -260,6 +324,8 @@ func (s *DashboardService) runConversation(ctx context.Context, taskID string, a
 	)
 
 	switch agent {
+	case biz.TaskAgentDefault:
+		result, err = s.executeAgent(ctx, taskID, biz.TaskAgentDefault, prompt)
 	case biz.TaskAgentRouter:
 		result, err = s.runRouterConversation(ctx, taskID, prompt, true)
 	case biz.TaskAgentCoder:
@@ -285,6 +351,15 @@ func (s *DashboardService) runConversation(ctx context.Context, taskID string, a
 				Agent:      agent.String(),
 				Stage:      "message_done",
 				Summary:    result.GetSummary(),
+				DurationMS: 0,
+			})
+			s.trace.AppendEvent(biz.DelegationEvent{
+				Time:       time.Now(),
+				TaskID:     taskID,
+				Agent:      agent.String(),
+				Stage:      "final_answer",
+				Summary:    result.GetSummary(),
+				ToolOutput: strings.TrimSpace(result.GetOutput()),
 				DurationMS: 0,
 			})
 			s.trace.UpdateTask(taskID, biz.TaskStatusDone, result, nil)
@@ -376,7 +451,7 @@ func (s *DashboardService) executeAgent(ctx context.Context, taskID string, agen
 func normalizeDashboardAgent(raw string) (biz.TaskAgent, error) {
 	agent := biz.TaskAgent(strings.ToLower(strings.TrimSpace(raw)))
 	switch agent {
-	case biz.TaskAgentRouter, biz.TaskAgentCoder:
+	case biz.TaskAgentDefault, biz.TaskAgentRouter, biz.TaskAgentCoder:
 		return agent, nil
 	default:
 		return "", fmt.Errorf("unsupported dashboard agent: %s", raw)
@@ -444,7 +519,7 @@ const dashboardTemplate = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>A2A Agent Dashboard</title>
+  <title>Agent Runtime Dashboard</title>
   <style>
     :root { --ink:#1e2430; --muted:#6b7280; --line:rgba(30,36,48,.12); --accent:#0f766e; --accent-soft:#d9f3ef; --warn:#c2410c; --ok:#166534; --shadow:0 18px 48px rgba(30,36,48,.12); }
     * { box-sizing: border-box; }
@@ -465,6 +540,11 @@ const dashboardTemplate = `<!doctype html>
     .meta,.session-list,.events,.agent-grid { display:grid; gap:10px; }
     .agent-grid { grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); }
     .chip { display:inline-flex; align-items:center; padding:6px 10px; border-radius:999px; background:var(--accent-soft); color:var(--accent); font-size:12px; font-weight:600; }
+    .legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .legend-item { display:inline-flex; align-items:center; gap:8px; font-size:12px; color:var(--muted); }
+    .legend-dot { width:10px; height:10px; border-radius:999px; display:inline-block; }
+    .legend-dot.user { background:#0f766e; }
+    .legend-dot.internal { background:#94a3b8; }
     .remote,.session,.event,.agent-card,.result-card { border:1px solid var(--line); border-radius:16px; padding:12px 14px; background:rgba(255,255,255,.72); }
     .session { cursor:pointer; }
     .session.active { border-color:rgba(15,118,110,.36); transform:translateX(4px); }
@@ -473,8 +553,23 @@ const dashboardTemplate = `<!doctype html>
     .status-ok { color:var(--ok); } .status-failed { color:var(--warn); }
     .status-idle { color:var(--muted); }
     .event-top { display:flex; justify-content:space-between; gap:12px; align-items:baseline; margin-bottom:6px; }
-    .event-stage { font-weight:700; text-transform:uppercase; letter-spacing:.08em; font-size:12px; }
+    .event-stage { font-weight:700; letter-spacing:.04em; font-size:13px; }
+    .event-raw { color:var(--muted); font-size:11px; margin-top:2px; font-family:ui-monospace,SFMono-Regular,Consolas,monospace; }
     .prompt { white-space:pre-wrap; line-height:1.5; color:var(--muted); margin-top:8px; }
+    .event.user-visible { border-color:rgba(15,118,110,.28); background:rgba(217,243,239,.42); }
+    .event.internal-flow { border-color:rgba(148,163,184,.28); background:rgba(241,245,249,.78); }
+    .event.final-answer { border-color:rgba(15,118,110,.42); background:rgba(217,243,239,.62); }
+    .event-kind { display:inline-flex; align-items:center; padding:3px 8px; border-radius:999px; font-size:11px; font-weight:700; }
+    .event-kind.user { background:rgba(15,118,110,.12); color:#0f766e; }
+    .event-kind.internal { background:rgba(148,163,184,.18); color:#475569; }
+    .preview-block { margin-top:8px; border:1px solid var(--line); border-radius:12px; background:rgba(255,255,255,.72); overflow:hidden; }
+    .preview-head { padding:8px 10px; border-bottom:1px solid var(--line); font-size:12px; color:var(--muted); }
+    details.preview { margin-top:8px; }
+    details.preview summary { cursor:pointer; list-style:none; color:var(--accent); font-size:12px; font-weight:600; }
+    details.preview summary::-webkit-details-marker { display:none; }
+    details.preview summary::before { content:"展开"; margin-right:6px; }
+    details.preview[open] summary::before { content:"收起"; }
+    .preview-body { white-space:pre-wrap; line-height:1.5; color:var(--muted); margin-top:8px; }
     .empty { padding:20px; border:1px dashed var(--line); border-radius:16px; color:var(--muted); text-align:center; }
     input,select,textarea { min-width:180px; padding:11px 14px; border-radius:12px; border:1px solid var(--line); background:rgba(255,255,255,.92); }
     textarea { width:100%; min-height:110px; resize:vertical; }
@@ -486,13 +581,18 @@ const dashboardTemplate = `<!doctype html>
   <div class="wrap">
     <section class="hero">
       <div class="eyebrow">Runtime Inspection</div>
-      <h1>启动 Agent 并观察委派链路</h1>
-      <div class="sub">这个页面现在用于启动 router / coder 两个常驻 agent，并向任意一个 agent 发送消息。消息会按内容决定是否委派给另一个 agent，右侧时间线会显示每一步事件。</div>
+      <h1>观察任务执行与工具闭环</h1>
+      <div class="sub">这个页面用于观察第一阶段通用 agent runtime 的任务执行过程。你可以直接给 default profile 发送任务，也可以继续验证 router / coder 兼容链路。右侧时间线会展示输入、工具调用、委派、结果与失败原因。</div>
       <div class="formline">
         <span class="chip" id="serverTime">loading</span>
+        <button id="startDefaultBtn">启动 Default Agent</button>
         <button id="startRouterBtn">启动 Router Agent</button>
         <button id="startCoderBtn">启动 Coder Agent</button>
         <button class="secondary" id="refreshBtn">刷新状态</button>
+      </div>
+      <div class="legend">
+        <div class="legend-item"><span class="legend-dot user"></span><span>给用户展示</span></div>
+        <div class="legend-item"><span class="legend-dot internal"></span><span>内部数据流转</span></div>
       </div>
       <div class="agent-grid" id="agents"></div>
     </section>
@@ -500,23 +600,25 @@ const dashboardTemplate = `<!doctype html>
       <aside class="panel">
         <h2>Send Message</h2>
         <div class="meta">
-          <select id="agent"><option value="router">router</option><option value="coder">coder</option></select>
-          <textarea id="prompt">请让 router 判断这是不是一个需要交给 coder 的实现任务，并展示委派过程。</textarea>
+          <select id="agent"><option value="default">default</option><option value="router">router</option><option value="coder">coder</option></select>
+          <textarea id="prompt">请先读取 README.md 的前 20 行，再总结第一阶段目标。</textarea>
           <div class="agent-actions"><button id="sendBtn">发送消息</button></div>
         </div>
         <h2 style="margin-top:18px;">Remote Targets</h2><div class="meta" id="remotes"></div>
         <h2 style="margin-top:18px;">Recent Sessions</h2><div class="session-list" id="sessions"></div>
       </aside>
-      <main class="panel"><h2>Delegation Timeline</h2><div id="timeline"></div></main>
+      <main class="panel"><h2>Delegation Timeline</h2><div id="timeline"></div><h2 style="margin-top:18px;">Execution Plan</h2><div id="plan"></div></main>
     </section>
   </div>
   <script>
     let state = { sessions: [], remotes: [], agents: [] };
     let selectedTaskId = "";
+    const expandedBlocks = new Set();
     const agentsEl = document.getElementById("agents");
     const remotesEl = document.getElementById("remotes");
     const sessionsEl = document.getElementById("sessions");
     const timelineEl = document.getElementById("timeline");
+    const planEl = document.getElementById("plan");
     const serverTimeEl = document.getElementById("serverTime");
     async function loadState() {
       const res = await fetch("/debug/a2a/state");
@@ -547,7 +649,109 @@ const dashboardTemplate = `<!doctype html>
         await loadState();
       } finally { btn.disabled = false; btn.textContent = "发送消息"; }
     }
-    function render() { renderAgents(); renderRemotes(); renderSessions(); renderTimeline(); }
+    function render() { renderAgents(); renderRemotes(); renderSessions(); renderTimeline(); renderPlan(); }
+    function summarizeMultiline(text, maxLines) {
+      const value = String(text || "").trim();
+      if (!value) { return ""; }
+      const lines = value.split("\n");
+      if (lines.length <= maxLines) { return value; }
+      return lines.slice(0, maxLines).join("\n") + "\n...";
+    }
+    function detailsOpenAttr(expandId) {
+      return expandId && expandedBlocks.has(expandId) ? " open" : "";
+    }
+    function renderExpandableBlock(label, content, maxLines, expandId) {
+      const value = String(content || "").trim();
+      if (!value) { return ""; }
+      const preview = summarizeMultiline(value, maxLines || 4);
+      const escapedLabel = escapeHtml(label);
+      const escapedPreview = escapeHtml(preview);
+      const escapedValue = escapeHtml(value);
+      const escapedExpandId = expandId ? escapeHtml(expandId) : "";
+      const expandAttr = expandId ? ' data-expand-id="'+escapedExpandId+'"' : "";
+      const openAttr = detailsOpenAttr(expandId);
+      if (preview === value) {
+        return '<div class="preview-block"><div class="preview-head">'+escapedLabel+'</div><div class="preview-body">'+escapedValue+'</div></div>';
+      }
+      return '<div class="preview-block"><div class="preview-head">'+escapedLabel+'</div><div class="preview-body">'+escapedPreview+'</div><details class="preview"'+expandAttr+openAttr+'><summary>查看完整内容</summary><div class="preview-body">'+escapedValue+'</div></details></div>';
+    }
+    function renderCollapsedBlock(label, preview, content, expandId) {
+      const value = String(content || "").trim();
+      if (!value) { return ""; }
+      const previewValue = String(preview || "").trim() || summarizeMultiline(value, 4);
+      const escapedExpandId = expandId ? escapeHtml(expandId) : "";
+      const expandAttr = expandId ? ' data-expand-id="'+escapedExpandId+'"' : "";
+      const openAttr = detailsOpenAttr(expandId);
+      return '<div class="preview-block"><div class="preview-head">'+escapeHtml(label)+'</div><div class="preview-body">'+escapeHtml(previewValue)+'</div><details class="preview"'+expandAttr+openAttr+'><summary>查看完整内容</summary><div class="preview-body">'+escapeHtml(value)+'</div></details></div>';
+    }
+    function stageDisplayLabel(stage) {
+      const labels = {
+        message_received: "User Message",
+        handle_direct: "Direct Handling",
+        delegate_local: "Delegated",
+        delegate_remote: "Delegated Remote",
+        remote_execute_done: "Remote Task Finished",
+        remote_execute_failed: "Remote Task Failed",
+        tool_read_file: "Tool Call: Read File",
+        tool_write_file: "Tool Call: Write File",
+        tool_exec_command: "Tool Call: Run Command",
+        message_done: "Message Done",
+        message_failed: "Message Failed",
+        final_answer: "Final Answer",
+        verification_start: "Verification Started",
+        verification_done: "Verification Done",
+        verification_failed: "Verification Failed",
+        task_running: "Task Running",
+        task_done: "Task Done",
+        task_failed: "Task Failed"
+      };
+      return labels[stage] || String(stage || "-");
+    }
+    function stageExtraMeta(event) {
+      const stage = String(event.stage || "");
+      if (stage === "final_answer") { return "assistant response"; }
+      if (stage.startsWith("tool_")) { return event.tool_name ? "tool: " + event.tool_name : "tool event"; }
+      if (stage === "delegate_local" || stage === "delegate_remote") { return event.mode ? "to " + event.mode : "delegation"; }
+      if (stage === "message_received") { return "task accepted"; }
+      if (stage === "message_done") { return "runtime completed"; }
+      return "";
+    }
+    function eventAudience(stage) {
+      const userVisible = new Set(["message_received", "message_failed", "message_done", "final_answer"]);
+      return userVisible.has(String(stage || "")) ? "user" : "internal";
+    }
+    function renderEventCard(event, taskId, eventIndex) {
+      const stage = String(event.stage || "-");
+      const isFinalAnswer = stage === "final_answer";
+      const isToolEvent = stage.startsWith("tool_");
+      const audience = eventAudience(stage);
+      const blockPrefix = String(taskId || "") + "::" + String(eventIndex);
+      const body = []
+      body.push('<div class="event '+(audience === "user" ? 'user-visible' : 'internal-flow')+(isFinalAnswer ? ' final-answer' : '')+'">');
+      body.push('<div class="event-top"><div><div class="event-stage">'+escapeHtml(stageDisplayLabel(stage))+'</div>' + (stage ? '<div class="event-raw">'+escapeHtml(stage)+'</div>' : '') + '</div><div class="small">'+escapeHtml(event.time || "")+'</div></div>');
+      body.push('<div class="event-kind '+(audience === "user" ? 'user' : 'internal')+'">'+(audience === "user" ? 'USER' : 'INTERNAL')+'</div>');
+      const meta = stageExtraMeta(event);
+      if (meta) { body.push('<div class="small">'+escapeHtml(meta)+'</div>'); }
+      body.push('<div class="small">agent: '+escapeHtml(event.agent || "-")+(event.mode ? " / mode: " + escapeHtml(event.mode) : "")+'</div>');
+      if (event.target) { body.push('<div class="small">target: '+escapeHtml(event.target)+'</div>'); }
+      if (event.tool_name) { body.push('<div class="small">tool: '+escapeHtml(event.tool_name)+'</div>'); }
+      if (event.exit_code !== undefined && event.exit_code !== 0) { body.push('<div class="small">exit_code: '+escapeHtml(String(event.exit_code))+'</div>'); }
+      if (event.summary) { body.push('<div class="prompt">'+escapeHtml(event.summary)+'</div>'); }
+      if (event.tool_input) { body.push(renderExpandableBlock("input", event.tool_input, 3, blockPrefix + "::input")); }
+      if (event.tool_output) {
+        if (isFinalAnswer) {
+          body.push(renderExpandableBlock("final answer", event.tool_output, 8, blockPrefix + "::final_answer"));
+        } else if (isToolEvent) {
+          body.push(renderCollapsedBlock("output", event.summary, event.tool_output, blockPrefix + "::output"));
+        } else {
+          body.push(renderExpandableBlock("output", event.tool_output, 4, blockPrefix + "::output"));
+        }
+      }
+      if (event.error) { body.push('<div class="prompt" style="color:#c2410c;">'+escapeHtml(event.error)+'</div>'); }
+      if (event.prompt_preview) { body.push('<div class="prompt">'+escapeHtml(event.prompt_preview)+'</div>'); }
+      body.push('</div>');
+      return body.join("");
+    }
     function renderAgents() {
       const agents = state.agents || [];
       if (!agents.length) { agentsEl.innerHTML = '<div class="empty">当前没有可展示的 agent 状态</div>'; return; }
@@ -578,18 +782,49 @@ const dashboardTemplate = `<!doctype html>
         + '<div class="k" style="margin-top:10px;">output</div><div class="prompt">'+escapeHtml(current.result_output || '-')+'</div>'
         + (current.error ? '<div class="k" style="margin-top:10px;">error</div><div class="prompt" style="color:#c2410c;">'+escapeHtml(current.error)+'</div>' : '')
         + '</div>';
-      const header = '<div class="event"><div class="event-top"><div><div class="small">task</div><div class="v">'+escapeHtml(current.task_id)+'</div></div><div class="chip">'+escapeHtml(current.status || "-")+'</div></div><div class="prompt">'+escapeHtml(current.prompt || "")+'</div></div>' + finalResult;
+      const header = '<div class="event"><div class="event-top"><div><div class="small">task</div><div class="v">'+escapeHtml(current.task_id)+'</div></div><div class="chip">'+escapeHtml(current.status || "-")+'</div></div><div class="prompt">'+escapeHtml(current.conversation_preview || "")+'</div></div>' + finalResult;
       const events = current.events || [];
       if (!events.length) { timelineEl.innerHTML = header + '<div class="empty" style="margin-top:12px;">这个 session 还没有采集到事件</div>'; return; }
-      timelineEl.innerHTML = header + '<div class="events" style="margin-top:12px;">' + events.map(event => '<div class="event"><div class="event-top"><div class="event-stage">'+escapeHtml(event.stage || "-")+'</div><div class="small">'+escapeHtml(event.time || "")+'</div></div><div class="small">agent: '+escapeHtml(event.agent || "-")+(event.mode ? " / mode: " + escapeHtml(event.mode) : "")+'</div>' + (event.target ? '<div class="small">target: '+escapeHtml(event.target)+'</div>' : '') + (event.summary ? '<div class="prompt">'+escapeHtml(event.summary)+'</div>' : '') + (event.error ? '<div class="prompt" style="color:#c2410c;">'+escapeHtml(event.error)+'</div>' : '') + (event.prompt_preview ? '<div class="prompt">'+escapeHtml(event.prompt_preview)+'</div>' : '') + '</div>').join("") + '</div>';
+      timelineEl.innerHTML = header + '<div class="events" style="margin-top:12px;">' + events.map((event, index) => renderEventCard(event, current.task_id, index)).join("") + '</div>';
+    }
+    if (!timelineEl.dataset.expandBound) {
+      timelineEl.dataset.expandBound = "1";
+      timelineEl.addEventListener("toggle", (evt) => {
+        const el = evt.target;
+        if (!el || !el.matches || !el.matches("details.preview")) { return; }
+        const id = el.dataset.expandId;
+        if (!id) { return; }
+        if (el.open) { expandedBlocks.add(id); } else { expandedBlocks.delete(id); }
+      }, true);
+    }
+    function renderPlan() {
+      const sessions = state.sessions || [];
+      const current = sessions.find(s => s.task_id === selectedTaskId) || sessions[0];
+      if (!current || !current.plan || !current.plan.length) { planEl.innerHTML = '<div class="empty">这个 session 还没有计划数据</div>'; return; }
+      planEl.innerHTML = current.plan.map(step => '<div class="event"><div class="event-top"><div class="v">'+escapeHtml(step.title || "-")+'</div><div class="small '+(step.status === "completed" ? "status-ok" : step.status === "failed" ? "status-failed" : "status-idle")+'">'+escapeHtml(step.status || "-")+'</div></div>' + (step.description ? '<div class="prompt">'+escapeHtml(step.description)+'</div>' : '') + '</div>').join("");
     }
     function escapeHtml(str) { return String(str).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll("\"","&quot;").replaceAll("'","&#39;"); }
     document.getElementById("refreshBtn").addEventListener("click", loadState);
+    document.getElementById("startDefaultBtn").addEventListener("click", () => startAgent("default"));
     document.getElementById("startRouterBtn").addEventListener("click", () => startAgent("router"));
     document.getElementById("startCoderBtn").addEventListener("click", () => startAgent("coder"));
     document.getElementById("sendBtn").addEventListener("click", sendMessage);
+    function connectStream() {
+      const es = new EventSource("/debug/a2a/stream");
+      es.addEventListener("state", (evt) => {
+        state = JSON.parse(evt.data);
+        serverTimeEl.textContent = state.server_time || "n/a";
+        if (!selectedTaskId && state.sessions && state.sessions.length) { selectedTaskId = state.sessions[0].task_id; }
+        render();
+      });
+      es.onerror = () => {
+        es.close();
+        setTimeout(connectStream, 2000);
+      };
+    }
     loadState();
-    setInterval(loadState, 5000);
+    connectStream();
+    setInterval(loadState, 15000);
   </script>
 </body>
 </html>`

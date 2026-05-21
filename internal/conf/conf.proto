@@ -44,7 +44,13 @@ message Data {
     string source = 2;
   }
 
+  message AgentMemory {
+    string dir = 1;
+    string user_id = 2;
+  }
+
   Database database = 1;
+  AgentMemory agent_memory = 2;
 }
 
 message Runtime {
@@ -54,15 +60,5 @@ message Runtime {
     int64 timeout = 3;
   }
 
-  message Sandbox {
-    bool enabled = 1;
-    string api_key = 2;
-    string base_url = 3;
-    string template = 4;
-    int64 timeout = 5;
-    string skill_command = 6;
-  }
-
   repeated RemoteAgent remotes = 1;
-  Sandbox sandbox = 2;
 }

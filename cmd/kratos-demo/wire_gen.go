@@ -21,13 +21,22 @@ import (
 func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, runtimeConf *conf.Runtime, logger log.Logger) (*kratos.App, func(), error) {
 	taskRepo := data.NewTaskRepo(logger)
 	delegationTraceStore := data.NewDelegationTraceStore()
-	agentRuntime := data.NewAgentRuntime(aiConf, runtimeConf, delegationTraceStore, logger)
-	taskDispatcher := data.NewTaskDispatcher(taskRepo, agentRuntime, delegationTraceStore, logger)
+	agentMemoryStore, err := data.NewAgentMemoryStore(dataConf, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	agentMemoryConfig := data.NewAgentMemoryConfig(dataConf)
+	agentMemoryUsecase, err := data.NewAgentMemoryUsecaseProvider(agentMemoryStore, agentMemoryConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	agentRuntime := data.NewAgentRuntime(aiConf, runtimeConf, delegationTraceStore, agentMemoryUsecase, logger)
+	taskDispatcher := data.NewTaskDispatcher(taskRepo, agentRuntime, delegationTraceStore, agentMemoryUsecase, logger)
 	taskUsecase := biz.NewTaskUsecase(taskRepo, taskDispatcher)
 	taskService := service.NewTaskService(taskUsecase)
-	dashboardService := service.NewDashboardService(delegationTraceStore, agentRuntime, runtimeConf)
 	agentRuntimeService := service.NewAgentRuntimeService(agentRuntime)
 	grpcServer := server.NewGRPCServer(serverConf, taskService, agentRuntimeService, logger)
+	dashboardService := service.NewDashboardService(delegationTraceStore, agentRuntime, agentMemoryUsecase, runtimeConf)
 	httpServer := server.NewHTTPServer(serverConf, taskService, dashboardService, logger)
 	app := newApp(logger, grpcServer, httpServer)
 	return app, func() {

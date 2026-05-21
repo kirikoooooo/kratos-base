@@ -18,10 +18,11 @@ type taskDispatcher struct {
 	repo    biz.TaskRepo
 	runtime biz.AgentRuntime
 	trace   biz.DelegationTraceStore
+	memory  *biz.AgentMemoryUsecase
 	log     *log.Helper
 }
 
-func NewTaskDispatcher(repo biz.TaskRepo, runtime biz.AgentRuntime, trace biz.DelegationTraceStore, logger log.Logger) biz.TaskDispatcher {
+func NewTaskDispatcher(repo biz.TaskRepo, runtime biz.AgentRuntime, trace biz.DelegationTraceStore, memory *biz.AgentMemoryUsecase, logger log.Logger) biz.TaskDispatcher {
 	if runtime != nil {
 		actorpkg.StopActor(runtime.PID())
 		if err := actorpkg.RegisterActor(runtime, runtimeMailboxSize); err != nil {
@@ -33,6 +34,7 @@ func NewTaskDispatcher(repo biz.TaskRepo, runtime biz.AgentRuntime, trace biz.De
 		repo:    repo,
 		runtime: runtime,
 		trace:   trace,
+		memory:  memory,
 		log:     log.NewHelper(logger),
 	}
 }
@@ -68,8 +70,14 @@ func (d *taskDispatcher) handle(ctx context.Context, cmd *taskv1.TaskCommand) {
 		d.log.Errorf("update task running failed: id=%s err=%v", cmd.TaskID, err)
 		return
 	}
+	if d.memory != nil {
+		if err := d.memory.StartConversation(ctx, task.ID, task.Agent, task.Prompt); err != nil {
+			d.log.Warnf("start conversation memory failed: id=%s err=%v", task.ID, err)
+		}
+	}
 	if d.trace != nil {
-		d.trace.StartTask(task.ID, task.Agent, task.Prompt, task.Status)
+		d.trace.StartTask(task.ID, task.Agent, task.Status)
+		d.trace.UpdatePlan(task.ID, initialPlan(task.Agent, task.Prompt))
 		d.trace.AppendEvent(biz.DelegationEvent{
 			Time:          time.Now(),
 			TaskID:        task.ID,

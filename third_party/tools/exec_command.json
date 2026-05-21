@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "exec_command",
+    "description": "在仓库根目录执行受限的本地验证命令，并返回 stdout、stderr 与退出码。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "命令参数。可直接传命令文本，如 go test ./...；也可传 JSON 字符串，如 {\"command\":\"git status --short\"}。"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

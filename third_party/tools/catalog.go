@@ -176,7 +176,7 @@ func (t *boundLangChainTool) Description() string {
 }
 
 func (t *boundLangChainTool) Call(ctx context.Context, input string) (string, error) {
-	return t.run(ctx, strings.TrimSpace(input))
+	return t.run(ctx, extractBoundInput(input))
 }
 
 func validateDefinition(definition Definition, source string) error {
@@ -210,4 +210,22 @@ func extractInputHint(parameters any) string {
 	}
 	description, _ := inputDef["description"].(string)
 	return strings.TrimSpace(description)
+}
+
+func extractBoundInput(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return ""
+	}
+
+	var payload struct {
+		Input string `json:"input"`
+	}
+	if strings.HasPrefix(raw, "{") && json.Unmarshal([]byte(raw), &payload) == nil {
+		if strings.TrimSpace(payload.Input) != "" {
+			return strings.TrimSpace(payload.Input)
+		}
+	}
+
+	return raw
 }
