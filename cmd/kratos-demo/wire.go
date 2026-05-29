@@ -24,3 +24,11 @@ func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, runt
 		newApp,
 	))
 }
+
+func wireCLI(dataConf *conf.Data, aiConf *conf.AI, runtimeConf *conf.Runtime, logger log.Logger) (*service.CLIService, func(), error) {
+	panic(wire.Build(
+		data.ProviderSet,
+		biz.ProviderSet,
+		service.ProviderSet,
+	))
+}

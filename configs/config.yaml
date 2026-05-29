@@ -12,7 +12,7 @@ data:
     driver: memory
     source: demo
   agent_memory:
-    dir: .kratos/agent
+    dir: .myagent
     user_id: default
     context_compress_threshold: 200000
     keep_recent_turns: 24  # 压缩时保留的最近对话轮次组（human 或 ai+tool），非单条 turn 数

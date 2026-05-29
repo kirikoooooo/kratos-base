@@ -13,3 +13,9 @@ wire:
 
 build:
 	go build ./...
+
+cli:
+	go run ./cmd/kratos-demo -conf ./configs -cli
+
+run:
+	go run ./cmd/kratos-demo -conf ./configs

@@ -4,21 +4,21 @@ import (
 	"context"
 
 	taskv1 "kratos-demo/api/task/v1"
-	"kratos-demo/internal/biz"
+	datatasking "kratos-demo/internal/data/tasking"
 
 	"github.com/google/wire"
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
-var ProviderSet = wire.NewSet(NewTaskService, NewAgentRuntimeService, NewDashboardService)
+var ProviderSet = wire.NewSet(NewTaskService, NewAgentRuntimeService, NewDashboardService, NewCLIService)
 
 type TaskService struct {
 	taskv1.UnimplementedTaskServiceServer
 
-	uc *biz.TaskUsecase
+	uc *datatasking.TaskUsecase
 }
 
-func NewTaskService(uc *biz.TaskUsecase) *TaskService {
+func NewTaskService(uc *datatasking.TaskUsecase) *TaskService {
 	return &TaskService{uc: uc}
 }
 
@@ -38,13 +38,13 @@ func (s *TaskService) GetTask(ctx context.Context, req *taskv1.GetTaskRequest) (
 	return toTaskReply(task), nil
 }
 
-func toTaskReply(task *biz.Task) *taskv1.TaskReply {
+func toTaskReply(task *datatasking.Task) *taskv1.TaskReply {
 	if task == nil {
 		return nil
 	}
 	return &taskv1.TaskReply{
 		TaskID:    task.ID,
-		Agent:     task.Agent.String(),
+		Agent:     string(task.Agent),
 		Prompt:    task.Prompt,
 		Status:    string(task.Status),
 		Result:    task.Result,

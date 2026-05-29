@@ -14,6 +14,8 @@ import (
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/data"
 	actorpkg "kratos-demo/third_party/actor"
+	datatasking "kratos-demo/internal/data/tasking"
+	datatrace "kratos-demo/internal/data/trace"
 )
 
 type dashboardTestMux struct {
@@ -26,19 +28,19 @@ func (m dashboardTestMux) HandleFunc(pattern string, handler http.HandlerFunc) {
 
 func TestDashboardStreamReturnsStateEvent(t *testing.T) {
 	trace := data.NewDelegationTraceStore()
-	trace.StartTask("stream-1", biz.TaskAgentDefault, biz.TaskStatusRunning)
-	trace.UpdatePlan("stream-1", []biz.PlanStep{{
+	trace.StartTask("stream-1", biz.AgentDefault, string(datatasking.TaskStatusRunning))
+	trace.UpdatePlan("stream-1", []datatrace.PlanStep{{
 		ID:     "understand",
 		Title:  "理解任务",
 		Status: "in_progress",
 	}})
-	trace.AppendEvent(biz.DelegationEvent{
+	trace.AppendEvent(datatrace.DelegationEvent{
 		TaskID:   "stream-1",
-		Agent:    biz.TaskAgentDefault.String(),
+		Agent:    string(biz.AgentDefault),
 		Stage:    "task_running",
 		ToolName: "read_file",
 	})
-	trace.UpdateTask("stream-1", biz.TaskStatusDone, &taskv1.TaskResult{
+	trace.UpdateTask("stream-1", string(datatasking.TaskStatusDone), &taskv1.TaskResult{
 		Summary: "done",
 		Output:  "summary",
 	}, nil)
@@ -89,10 +91,10 @@ func TestRunConversationAppendsFinalAnswerEvent(t *testing.T) {
 			Output:  "final answer content",
 		},
 	}
-	svc := NewDashboardService(trace, runtime, nil, nil, &conf.Runtime{})
-	svc.markAgentStarted(biz.TaskAgentDefault)
+	svc := NewDashboardService(trace, biz.NewAgentRuntimeUsecase(runtime), nil, nil, &conf.Runtime{})
+	svc.markAgentStarted(biz.AgentDefault)
 
-	result, err := svc.runConversation(context.Background(), "session-final", biz.TaskAgentDefault, "summarize README")
+	result, err := svc.runConversation(context.Background(), "session-final", biz.AgentDefault, "summarize README")
 	if err != nil {
 		t.Fatalf("runConversation() error = %v", err)
 	}
@@ -132,15 +134,15 @@ func (f fakeDashboardRuntime) PID() actorpkg.PID           { return actorpkg.New
 func (f fakeDashboardRuntime) Process(_ *actorpkg.Message) {}
 func (f fakeDashboardRuntime) OnStop()                     {}
 func (f fakeDashboardRuntime) Name() string                { return "fake-dashboard-runtime" }
-func (f fakeDashboardRuntime) Supports(agent biz.TaskAgent) bool {
+func (f fakeDashboardRuntime) Supports(agent biz.Agent) bool {
 	switch agent {
-	case biz.TaskAgentDefault, biz.TaskAgentRouter, biz.TaskAgentCoder, biz.TaskAgentReviewer:
+	case biz.AgentDefault, biz.AgentRouter, biz.AgentCoder, biz.AgentReviewer:
 		return true
 	default:
 		return false
 	}
 }
-func (f fakeDashboardRuntime) Execute(_ context.Context, _ biz.TaskAgent, _ string) (*taskv1.TaskResult, error) {
+func (f fakeDashboardRuntime) Execute(_ context.Context, _ biz.Agent, _ string) (*taskv1.TaskResult, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -153,7 +155,7 @@ func (f fakeDashboardRuntime) ReceiveTask(ctx context.Context, cmd *taskv1.TaskC
 	if cmd == nil {
 		return nil, errors.New("task command is nil")
 	}
-	return f.Execute(ctx, biz.TaskAgent(cmd.GetAgent()), cmd.GetPrompt())
+	return f.Execute(ctx, biz.Agent(cmd.GetAgent()), cmd.GetPrompt())
 }
 func (f fakeDashboardRuntime) SendTask(ctx context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
 	return f.ReceiveTask(ctx, cmd)

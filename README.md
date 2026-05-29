@@ -16,7 +16,7 @@
 | 任务 API | HTTP `POST /api/v1/tasks` 创建任务，`GET /api/v1/tasks/{taskID}` 查询状态 |
 | Agent Runtime | `default` / `router` / `coder` / `reviewer`，基于 OpenAI 兼容 API + 本地工具循环 |
 | 本地工具 | `read_file`、`edit_file`、`write_file`、`exec_command`（工作区根目录内） |
-| Agent 记忆 | 用户级 / 会话级提示词记忆、对话历史持久化（`.kratos/agent`） |
+| Agent 记忆 | 用户级 / 会话级提示词记忆、对话历史持久化（`.myagent`） |
 | 上下文压缩 | 按 session 统计对话体积，超过阈值自动压缩后再送 LLM |
 | 会话文件变更 | 按 session 累积 `read_file` / `edit_file` / `write_file` 变更，Dashboard 展示 unified diff |
 | 会话错误日志 | 失败写入 JSONL，下一轮 system prompt 注入近期错误摘要 |
@@ -26,14 +26,23 @@
 ### 架构分层
 
 ```text
-service (HTTP/gRPC, Dashboard)
-    ↓
-biz (task, memory, trace, session_change, conversation_compress)
-    ↓
-data (langchain runtime, local_tools, memory_store, task_dispatcher)
+cmd/kratos-demo/              # 入口、Wire 注入
+internal/
+  service/                    # HTTP/gRPC、Dashboard 适配
+  server/                     # Kratos Server
+  conf/                       # 配置 Proto
+  biz/                        # 仅 AgentRuntime / DelegationVerifier 契约
+  data/
+    model/                    # 领域模型与 Store 接口
+    agent/                    # LangChain runtime、记忆、工具
+    tasking/                  # TaskRepo、Dispatcher、Usecase
+    trace/                    # 委派 Trace
+    session/                  # 会话文件变更
+    common/                   # 共享工具
+api/                          # Proto 与生成代码
 ```
 
-### Agent 记忆目录（`data.agent_memory.dir`，默认 `.kratos/agent`）
+### Agent 记忆目录（`data.agent_memory.dir`，默认 `.myagent`）
 
 | 路径 | 内容 |
 |------|------|
@@ -64,7 +73,29 @@ data (langchain runtime, local_tools, memory_store, task_dispatcher)
 在项目根目录执行：
 
 ```bash
+### 启动方式
+
+**HTTP + Dashboard（调试面板）**
+
+```bash
 go run ./cmd/kratos-demo -conf ./configs
+# 或
+make run
+```
+
+Dashboard：http://127.0.0.1:8000/debug/a2a
+
+**本地 CLI（类似 Claude Code）**
+
+启动全部 agent（default / router / coder / reviewer），交互消息默认由 **router** 接收并委派：
+
+```bash
+go run ./cmd/kratos-demo -conf ./configs -cli
+# 或
+make cli
+```
+
+CLI 命令：`/help` `/agents` `/session` `/new` `/exit`
 ```
 
 启动后可访问：
@@ -78,7 +109,7 @@ go run ./cmd/kratos-demo -conf ./configs
 ```yaml
 data:
   agent_memory:
-    dir: .kratos/agent
+    dir: .myagent
     user_id: default
     context_compress_threshold: 200000   # 超过该字符估算值则压缩
     keep_recent_turns: 24                 # 压缩时保留的最近对话轮次组

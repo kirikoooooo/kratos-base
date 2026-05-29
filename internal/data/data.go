@@ -3,8 +3,11 @@ package data
 import (
 	"context"
 
-	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
+	dataagent "kratos-demo/internal/data/agent"
+	datasession "kratos-demo/internal/data/session"
+	datatasking "kratos-demo/internal/data/tasking"
+	datatrace "kratos-demo/internal/data/trace"
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/google/wire"
@@ -12,21 +15,22 @@ import (
 
 var ProviderSet = wire.NewSet(
 	NewData,
-	NewTaskRepo,
-	NewDelegationTraceStore,
-	NewSessionChangeStore,
-	NewAgentMemoryStore,
-	NewAgentMemoryConfig,
+	datatasking.NewTaskRepo,
+	datatasking.NewTaskUsecase,
+	datatrace.NewDelegationTraceStore,
+	datasession.NewSessionStore,
+	dataagent.NewAgentMemoryStore,
+	dataagent.NewAgentMemoryConfig,
 	NewAgentMemoryUsecaseProvider,
-	NewAgentRuntime,
-	NewTaskDispatcher,
+	dataagent.NewAgentRuntime,
+	datatasking.NewTaskDispatcher,
 )
 
-func NewAgentMemoryUsecaseProvider(store biz.AgentMemoryStore, cfg biz.AgentMemoryConfig) (*biz.AgentMemoryUsecase, error) {
-	if err := BootstrapUserMemoryIfEmpty(context.Background(), store, cfg.UserID, ""); err != nil {
+func NewAgentMemoryUsecaseProvider(store dataagent.AgentMemoryStore, cfg dataagent.AgentMemoryConfig) (dataagent.AgentMemory, error) {
+	if err := dataagent.BootstrapUserMemoryIfEmpty(context.Background(), store, cfg.UserID, ""); err != nil {
 		return nil, err
 	}
-	return biz.NewAgentMemoryUsecase(store, cfg), nil
+	return dataagent.NewAgentMemoryUsecase(store, cfg), nil
 }
 
 type Data struct {
