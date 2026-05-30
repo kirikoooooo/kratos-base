@@ -78,6 +78,25 @@ func (r *cliLineReader) SetPrompt(ui *cliUI, mode PermissionMode) {
 	}
 }
 
+func (r *cliLineReader) ReadLineWithPrompt(ui *cliUI, prompt string, mode PermissionMode) (string, error) {
+	if r.useRL {
+		r.rl.SetPrompt(prompt)
+		line, err := r.rl.Readline()
+		if err != nil {
+			return "", err
+		}
+		return sanitizeCLIInput(line), nil
+	}
+	ui.printf("%s", prompt)
+	if !r.scan.Scan() {
+		if err := r.scan.Err(); err != nil {
+			return "", err
+		}
+		return "", io.EOF
+	}
+	return sanitizeCLIInput(r.scan.Text()), nil
+}
+
 func (r *cliLineReader) PauseForOverlay() {
 	if r != nil && r.rl != nil {
 		r.rl.Clean()

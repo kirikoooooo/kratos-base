@@ -73,6 +73,7 @@ func main() {
 		}
 		defer cleanup()
 		cli.BindSession(sessionID, processLog)
+		cli.BindAIConfig(bc.GetAi())
 		if err := cli.Run(context.Background()); err != nil {
 			fmt.Fprintf(os.Stderr, "cli error: %v\n", err)
 			os.Exit(1)

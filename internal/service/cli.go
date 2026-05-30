@@ -15,6 +15,7 @@ import (
 
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
+	"kratos-demo/internal/conf"
 	datatasking "kratos-demo/internal/data/tasking"
 	dataagent "kratos-demo/internal/data/agent"
 	datatrace "kratos-demo/internal/data/trace"
@@ -38,6 +39,8 @@ type CLIService struct {
 
 	permMode PermissionMode
 	permMu   sync.Mutex
+
+	aiConfig *conf.AI
 }
 
 type approvalRequest struct {
@@ -81,8 +84,6 @@ func (c *CLIService) Run(ctx context.Context) error {
 		return errors.New("cli service is not available")
 	}
 	c.ui = newCLIUI(c.out)
-	c.dash.StartAllAgents()
-	c.ui.printWelcome(c.sessionID, c.processLogPath())
 
 	reader, err := newCLILineReader(c.in, c.ui, c.onShiftTabMode)
 	if err != nil {
@@ -90,6 +91,13 @@ func (c *CLIService) Run(ctx context.Context) error {
 	}
 	defer reader.Close()
 	c.lineReader = reader
+
+	if err := c.ensureAIConfig(); err != nil {
+		return err
+	}
+
+	c.dash.StartAllAgents()
+	c.ui.printWelcome(c.sessionID, c.processLogPath())
 
 	idleCtrlC := 0
 	for {
@@ -351,6 +359,9 @@ func (c *CLIService) handleCommand(line string) bool {
 		c.onShiftTabMode()
 		return true
 	default:
+		if c.handleConfigCommand(line) {
+			return true
+		}
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "/mode ") {
 			arg := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(line)), "/mode"))
 			switch arg {

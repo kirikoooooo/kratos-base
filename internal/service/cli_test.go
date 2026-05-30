@@ -18,6 +18,10 @@ func TestCLIServiceStartsAllAgentsAndHandlesHelp(t *testing.T) {
 		in:        strings.NewReader("/agents\n/help\n/exit\n"),
 		out:       &bytes.Buffer{},
 	}
+	cli.BindAIConfig(&conf.AI{Openai: &conf.AI_OpenAI{
+		ApiKey:  "sk-test",
+		BaseUrl: "https://example.com/v1",
+	}})
 	cli.ui = newCLIUI(cli.out)
 
 	if err := cli.Run(context.Background()); err != nil {

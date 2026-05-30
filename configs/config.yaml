@@ -19,8 +19,9 @@ data:
     tool_output_max_chars: 8000
 ai:
   openai:
-    api_key: "sk-9LAwFafTcQgGzTmo01XVzYk7LmVBj5Ba8zb85twR88TsyKRO"
-    base_url: "https://api.openai-proxy.org/v1"
+    # api_key / base_url 由 CLI 写入 .myagent/credentials.json，此处留空
+    # api_key: ""
+    # base_url: ""
     model: gpt-5.4-mini
     timeout_seconds: 180
 runtime:
