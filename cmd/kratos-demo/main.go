@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"time"
 
@@ -29,6 +30,11 @@ func init() {
 
 func main() {
 	flag.Parse()
+
+	if flagCLI {
+		// Kratos config watcher logs to the global logger on Close(); keep CLI stdout clean.
+		log.SetLogger(log.NewStdLogger(io.Discard))
+	}
 
 	c := config.New(
 		config.WithSource(
@@ -68,7 +74,8 @@ func main() {
 		defer cleanup()
 		cli.BindSession(sessionID, processLog)
 		if err := cli.Run(context.Background()); err != nil {
-			panic(err)
+			fmt.Fprintf(os.Stderr, "cli error: %v\n", err)
+			os.Exit(1)
 		}
 		return
 	}

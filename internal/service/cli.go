@@ -1,21 +1,24 @@
 package service
 
 import (
-	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/chzyer/readline"
 
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
 	datatasking "kratos-demo/internal/data/tasking"
 	dataagent "kratos-demo/internal/data/agent"
 	datatrace "kratos-demo/internal/data/trace"
+	agentctx "kratos-demo/internal/data/agent/ctx"
 
 	"github.com/go-kratos/kratos/v2/log"
 )
@@ -29,6 +32,22 @@ type CLIService struct {
 	out        io.Writer
 	shouldExit bool
 	ui         *cliUI
+	lineReader *cliLineReader
+
+	approvalBridge chan approvalRequest
+
+	permMode PermissionMode
+	permMu   sync.Mutex
+}
+
+type approvalRequest struct {
+	action agentctx.RiskAction
+	resp   chan approvalResponse
+}
+
+type approvalResponse struct {
+	allowed bool
+	err     error
 }
 
 func NewCLIService(
@@ -46,6 +65,7 @@ func NewCLIService(
 		sessionID: fmt.Sprintf("cli-%d", time.Now().Unix()),
 		in:        os.Stdin,
 		out:       os.Stdout,
+		permMode:  PermAsk,
 	}
 }
 
@@ -64,18 +84,34 @@ func (c *CLIService) Run(ctx context.Context) error {
 	c.dash.StartAllAgents()
 	c.ui.printWelcome(c.sessionID, c.processLogPath())
 
-	scanner := bufio.NewScanner(c.in)
-	for {
-		c.ui.printPrompt()
-		if !scanner.Scan() {
-			if err := scanner.Err(); err != nil {
-				return err
-			}
-			c.ui.println("")
-			return nil
-		}
+	reader, err := newCLILineReader(c.in, c.ui, c.onShiftTabMode)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	c.lineReader = reader
 
-		line := strings.TrimSpace(scanner.Text())
+	idleCtrlC := 0
+	for {
+		line, err := reader.ReadLine(c.ui, c.permissionMode())
+		if err != nil {
+			if err == io.EOF {
+				c.ui.println("")
+				return nil
+			}
+			if errors.Is(err, readline.ErrInterrupt) {
+				idleCtrlC++
+				if idleCtrlC >= 2 {
+					c.ui.println(c.ui.dim("  goodbye."))
+					return nil
+				}
+				c.ui.println(c.ui.dim("  按 Ctrl+C 再次退出 · 输入 /exit 也可退出"))
+				continue
+			}
+			return err
+		}
+		idleCtrlC = 0
+
 		if line == "" {
 			continue
 		}
@@ -88,6 +124,9 @@ func (c *CLIService) Run(ctx context.Context) error {
 		}
 
 		c.processTurn(ctx, line)
+		if c.shouldExit {
+			return nil
+		}
 	}
 }
 
@@ -104,29 +143,77 @@ func (c *CLIService) processTurn(ctx context.Context, prompt string) {
 		c.processLog.LogTurnStart(c.sessionID, prompt)
 	}
 
+	turnCtx, cancelTurn := context.WithCancel(ctx)
+	defer cancelTurn()
+
+	turnCtx = c.contextWithApproval(turnCtx)
+
+	c.approvalBridge = make(chan approvalRequest)
+	defer func() { c.approvalBridge = nil }()
+
 	baseline := c.sessionEventCount(c.sessionID)
 	var (
 		result *taskv1.TaskResult
 		runErr error
-		wg     sync.WaitGroup
 	)
-	wg.Add(1)
+	done := make(chan struct{})
 	go func() {
-		defer wg.Done()
-		result, runErr = c.dash.runConversation(ctx, c.sessionID, biz.AgentRouter, prompt)
+		defer close(done)
+		result, runErr = c.dash.runConversation(turnCtx, c.sessionID, biz.AgentRouter, prompt)
 	}()
 
 	stopWatch := make(chan struct{})
-	go c.watchSessionEvents(ctx, c.sessionID, baseline, stopWatch)
+	go c.watchSessionEvents(turnCtx, c.sessionID, baseline, stopWatch)
+
+	sigCh := make(chan os.Signal, 2)
+	signal.Notify(sigCh, os.Interrupt)
+	defer signal.Stop(sigCh)
 
 	spinner := c.ui.startSpinner("router thinking…")
-	wg.Wait()
-	close(stopWatch)
-	spinner.halt()
+	turnCancelled := false
+	spinnerStopped := false
+	stopSpinner := func() {
+		if spinnerStopped {
+			return
+		}
+		spinnerStopped = true
+		spinner.halt()
+	}
+	for {
+		select {
+		case req := <-c.approvalBridge:
+			spinner.freeze()
+			allowed, err := c.handleApprovalRequest(req.action)
+			req.resp <- approvalResponse{allowed: allowed, err: err}
+			spinner.unfreeze()
+		case <-sigCh:
+			if !turnCancelled {
+				turnCancelled = true
+				cancelTurn()
+				stopSpinner()
+				c.ui.println(c.ui.dim("  已停止生成（Ctrl+C）· 再次 Ctrl+C 退出"))
+				continue
+			}
+			c.shouldExit = true
+			cancelTurn()
+			stopSpinner()
+			close(stopWatch)
+			c.ui.println(c.ui.dim("  goodbye."))
+			return
+		case <-done:
+			stopSpinner()
+			close(stopWatch)
+			goto turnDone
+		}
+	}
+turnDone:
 
 	c.flushNewEvents(c.sessionID, baseline)
 
 	if runErr != nil {
+		if errors.Is(runErr, context.Canceled) || errors.Is(turnCtx.Err(), context.Canceled) {
+			return
+		}
 		if c.processLog != nil {
 			c.processLog.LogTurnDone(c.sessionID, "", "", runErr)
 		}
@@ -260,8 +347,40 @@ func (c *CLIService) handleCommand(line string) bool {
 			c.ui.println(c.ui.dim("  logs    ") + path)
 		}
 		return true
+	case "/mode":
+		c.onShiftTabMode()
+		return true
 	default:
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "/mode ") {
+			arg := strings.TrimSpace(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(line)), "/mode"))
+			switch arg {
+			case "ask":
+				c.setPermissionMode(PermAsk)
+			case "agent":
+				c.setPermissionMode(PermAgent)
+			case "auto":
+				c.setPermissionMode(PermAuto)
+			default:
+				c.ui.println(c.ui.dim("  用法: /mode ask|agent|auto"))
+				return true
+			}
+			c.refreshPermissionPrompt()
+			c.ui.printPermissionMode(c.permissionMode())
+			return true
+		}
 		return false
+	}
+}
+
+func (c *CLIService) onShiftTabMode() {
+	mode := c.cyclePermissionMode()
+	c.refreshPermissionPrompt()
+	c.ui.printPermissionMode(mode)
+}
+
+func (c *CLIService) refreshPermissionPrompt() {
+	if c.lineReader != nil {
+		c.lineReader.SetPrompt(c.ui, c.permissionMode())
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -42,6 +43,7 @@ func (r *Runtime) Bindings() []toolcatalog.BindingSpec {
 		{Name: "read_file", Handler: r.readFile},
 		{Name: "edit_file", Handler: r.editFile},
 		{Name: "write_file", Handler: r.writeFile},
+		{Name: "delete_file", Handler: r.deleteFile},
 		{Name: "exec_command", Handler: r.execCommand},
 	}
 }
@@ -313,16 +315,63 @@ func (r *Runtime) writeFile(ctx context.Context, input string) (string, error) {
 	return output, nil
 }
 
+func (r *Runtime) deleteFile(ctx context.Context, input string) (string, error) {
+	spec, err := parseDeleteFileInput(input)
+	if err != nil {
+		return "", err
+	}
+
+	absPath, err := r.resolvePath(spec.Path)
+	if err != nil {
+		return "", err
+	}
+
+	info, err := os.Stat(absPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", fmt.Errorf("delete_file %s failed: file does not exist", spec.Path)
+		}
+		return "", fmt.Errorf("delete_file %s failed: %w", spec.Path, err)
+	}
+	if info.IsDir() {
+		return "", fmt.Errorf("delete_file %s failed: path is a directory; delete_file only removes files", spec.Path)
+	}
+
+	before, _ := os.ReadFile(absPath)
+	if err := requireRiskApproval(ctx, agentctx.RiskAction{
+		Tool:    "delete_file",
+		Summary: "删除文件 " + spec.Path,
+		Detail:  fmt.Sprintf("将永久删除工作区文件 %s（%d 字节）", spec.Path, info.Size()),
+	}); err != nil {
+		return "", err
+	}
+
+	if err := os.Remove(absPath); err != nil {
+		return "", fmt.Errorf("delete_file %s failed: %w", spec.Path, err)
+	}
+
+	output := fmt.Sprintf("path: %s\noperation: delete_file\ndeleted file (%d bytes)", spec.Path, info.Size())
+	r.recordFileChange(ctx, spec.Path, "delete_file", "delete", "deleted file", string(before), "")
+	r.appendToolEvent(ctx, "tool_delete_file", "delete_file", spec.Path, output, "", 0)
+	return output, nil
+}
+
 func (r *Runtime) execCommand(ctx context.Context, input string) (string, error) {
 	command, err := parseExecCommandInput(input)
 	if err != nil {
 		return "", err
 	}
-	if err := validateExecCommand(command); err != nil {
-		return "", err
+	if risky, reason := classifyExecCommandRisk(command); risky {
+		if err := requireRiskApproval(ctx, agentctx.RiskAction{
+			Tool:    "exec_command",
+			Summary: "执行高风险命令",
+			Detail:  fmt.Sprintf("%s\n命令: %s", reason, command),
+		}); err != nil {
+			return "", err
+		}
 	}
 
-	cmd := exec.CommandContext(ctx, "powershell", "-Command", command)
+	cmd := shellCommand(ctx, command)
 	cmd.Dir = r.root
 	outputBytes, runErr := cmd.CombinedOutput()
 	output := strings.TrimSpace(string(outputBytes))
@@ -498,6 +547,28 @@ type writeFileInput struct {
 	Content string `json:"content"`
 }
 
+type deleteFileInput struct {
+	Path string `json:"path"`
+}
+
+func parseDeleteFileInput(input string) (deleteFileInput, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return deleteFileInput{}, errors.New("delete_file input is empty")
+	}
+	if !strings.HasPrefix(input, "{") {
+		return deleteFileInput{Path: input}, nil
+	}
+	var spec deleteFileInput
+	if err := json.Unmarshal([]byte(input), &spec); err != nil {
+		return deleteFileInput{}, fmt.Errorf("parse delete_file input failed: %w", err)
+	}
+	if strings.TrimSpace(spec.Path) == "" {
+		return deleteFileInput{}, errors.New("delete_file path is required")
+	}
+	return spec, nil
+}
+
 func parseWriteFileInput(input string) (writeFileInput, error) {
 	input = strings.TrimSpace(input)
 	if input == "" {
@@ -555,21 +626,11 @@ func normalizeLineRange(start, end, total int) (int, int) {
 	return start, end
 }
 
-func validateExecCommand(command string) error {
-	command = strings.TrimSpace(strings.ToLower(command))
-	if command == "" {
-		return errors.New("exec command is empty")
+func shellCommand(ctx context.Context, command string) *exec.Cmd {
+	if runtime.GOOS == "windows" {
+		return exec.CommandContext(ctx, "powershell", "-Command", command)
 	}
-	blocked := []string{
-		"rm ", "rmdir ", "del ", "erase ", "format ", "shutdown ", "restart-computer",
-		"stop-computer", "remove-item", "git reset", "git checkout --", "git clean",
-	}
-	for _, item := range blocked {
-		if strings.Contains(command, item) {
-			return fmt.Errorf("exec command is not allowed: %s", strings.TrimSpace(item))
-		}
-	}
-	return nil
+	return exec.CommandContext(ctx, "sh", "-c", command)
 }
 
 func summarizeToolOutput(output string) string {

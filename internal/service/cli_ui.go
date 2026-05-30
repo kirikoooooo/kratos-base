@@ -27,10 +27,10 @@ const (
 var codeFenceRE = regexp.MustCompile("(?s)```([^\n`]*)\n(.*?)```")
 
 type cliUI struct {
-	out     io.Writer
-	color   bool
-	mu      sync.Mutex
-	spinner *cliSpinner
+	out           io.Writer
+	color         bool
+	mu            sync.Mutex
+	activeSpinner *cliSpinner
 }
 
 func newCLIUI(out io.Writer) *cliUI {
@@ -94,12 +94,14 @@ func (u *cliUI) printWelcome(sessionID, logPath string) {
 	if logPath = strings.TrimSpace(logPath); logPath != "" {
 		u.println(u.dim("  logs    ") + logPath)
 	}
-	u.println(u.dim("  tips      ") + "/help · /new · /exit")
+	u.println(u.dim("  tips      ") + "/help · /new · /exit · Shift+Tab 切换权限")
+	u.println(u.dim("  safety    ") + "ask/agent/auto · 高风险操作 ↑↓ 选择 Enter 确认")
+	u.println(u.dim("  ctrl+c    ") + "生成中：首次停止 · 再次退出 · 空闲时连按两次退出")
 	u.println("")
 }
 
-func (u *cliUI) printPrompt() {
-	u.printf("\n%s %s ", u.cyan("router"), u.dim("›"))
+func (u *cliUI) printPrompt(mode PermissionMode) {
+	u.printf("\n%s %s %s ", u.cyan("router"), u.permissionModeTag(mode), u.dim("›"))
 }
 
 func (u *cliUI) printHelp() {
@@ -109,9 +111,11 @@ func (u *cliUI) printHelp() {
 	u.println(u.dim("  /agents   ") + "agent status")
 	u.println(u.dim("  /session  ") + "session id")
 	u.println(u.dim("  /new      ") + "new session")
+	u.println(u.dim("  /mode     ") + "permission mode (ask/agent/auto)")
 	u.println(u.dim("  /exit     ") + "quit")
 	u.println("")
-	u.println(u.dim("  type a message to talk to router (delegates to coder/reviewer when needed)"))
+	u.println(u.dim("  Shift+Tab ") + "cycle permission: ask → agent → auto")
+	u.println(u.dim("  Ctrl+C    ") + "stop generation (1st) · exit CLI (2nd)")
 	u.println("")
 }
 
@@ -155,8 +159,11 @@ func (u *cliUI) printError(err error) {
 }
 
 func (u *cliUI) printProgressLine(line string) {
-	if u.spinner != nil {
-		u.spinner.note(line)
+	u.mu.Lock()
+	s := u.activeSpinner
+	u.mu.Unlock()
+	if s != nil {
+		s.note(line)
 		return
 	}
 	u.println(line)
@@ -187,7 +194,7 @@ func formatCLIToolTarget(event datatrace.DelegationEvent) string {
 		target = strings.TrimSpace(event.Summary)
 	}
 	switch tool {
-	case "read_file", "write_file", "edit_file":
+	case "read_file", "write_file", "edit_file", "delete_file":
 		return target
 	case "exec_command":
 		if len([]rune(target)) > 72 {
@@ -345,11 +352,13 @@ func writeCLICodeBlock(u *cliUI, indent, lang, code string) {
 }
 
 type cliSpinner struct {
-	ui     *cliUI
-	label  string
-	stopCh chan struct{}
-	done   chan struct{}
-	frames []string
+	ui       *cliUI
+	label    string
+	stopCh   chan struct{}
+	done     chan struct{}
+	frames   []string
+	frozen   bool
+	haltOnce sync.Once
 }
 
 func (u *cliUI) startSpinner(label string) *cliSpinner {
@@ -360,8 +369,42 @@ func (u *cliUI) startSpinner(label string) *cliSpinner {
 		done:   make(chan struct{}),
 		frames: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
 	}
+	u.mu.Lock()
+	u.activeSpinner = s
+	u.mu.Unlock()
 	go s.run()
 	return s
+}
+
+func (u *cliUI) freezeSpinner() {
+	u.mu.Lock()
+	s := u.activeSpinner
+	u.mu.Unlock()
+	if s != nil {
+		s.freeze()
+	}
+}
+
+func (u *cliUI) unfreezeSpinner() {
+	u.mu.Lock()
+	s := u.activeSpinner
+	u.mu.Unlock()
+	if s != nil {
+		s.unfreeze()
+	}
+}
+
+func (s *cliSpinner) freeze() {
+	s.ui.mu.Lock()
+	s.frozen = true
+	s.ui.mu.Unlock()
+	s.clear()
+}
+
+func (s *cliSpinner) unfreeze() {
+	s.ui.mu.Lock()
+	s.frozen = false
+	s.ui.mu.Unlock()
 }
 
 func (s *cliSpinner) run() {
@@ -375,6 +418,12 @@ func (s *cliSpinner) run() {
 			s.clear()
 			return
 		case <-ticker.C:
+			s.ui.mu.Lock()
+			frozen := s.frozen
+			s.ui.mu.Unlock()
+			if frozen {
+				continue
+			}
 			frame := s.frames[i%len(s.frames)]
 			i++
 			s.draw(frame)
@@ -415,8 +464,15 @@ func (s *cliSpinner) note(line string) {
 }
 
 func (s *cliSpinner) halt() {
-	close(s.stopCh)
-	<-s.done
+	s.haltOnce.Do(func() {
+		close(s.stopCh)
+		<-s.done
+		s.ui.mu.Lock()
+		if s.ui.activeSpinner == s {
+			s.ui.activeSpinner = nil
+		}
+		s.ui.mu.Unlock()
+	})
 }
 
 func max(a, b int) int {

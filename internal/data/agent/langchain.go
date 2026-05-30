@@ -448,7 +448,8 @@ func (r *langChainAgentRuntime) buildManagedToolset(bindings []toolcatalog.Bindi
 
 func toolCallingSystemSuffix() string {
 	return strings.Join([]string{
-		"修改已有文件必须先 read_file，再用 edit_file 原子操作：insert_line/insert_after_line/prepend/append 插入，delete_line/delete_lines/delete_string 删除，replace_line/replace_lines/search_replace 替换；行号从 1 开始；write_file 仅新建文件。",
+		"修改已有文件必须先 read_file，再用 edit_file 原子操作：insert_line/insert_after_line/prepend/append 插入，delete_line/delete_lines/delete_string 删除行或片段，replace_line/replace_lines/search_replace 替换；行号从 1 开始；write_file 仅新建文件。",
+		"删除整个文件必须使用 delete_file（不要用 edit_file 清空全部行代替）；delete_file 与 rm/del/git clean 等 exec_command 会在 CLI 终端弹出确认菜单（↑↓ 选择，Enter 确认），未批准时不要换工具绕过。",
 		"分析目录结构时对目录调用 read_file（如 read_file internal/biz）会返回条目列表，再逐个 read_file 具体 .go 文件；不要依赖 exec_command 做目录搜索。",
 		"若 read_file 因路径不存在失败，先尝试 read_file 父目录或修正相对路径；exec_command 全任务最多 3 次且失败后会禁用，优先 read_file。",
 		"",

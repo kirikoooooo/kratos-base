@@ -1,0 +1,21 @@
+{
+  "type": "function",
+  "function": {
+    "name": "delete_file",
+    "description": "删除工作区内的单个文件（整文件删除）。不要用 edit_file 清空内容代替删除；不要用 exec_command 执行 rm/del。执行前会要求用户确认。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "JSON，例如 {\"path\":\"popup_flower.py\"}。path 为相对工作区根的路径，禁止绝对路径。"
+        }
+      },
+      "required": [
+        "input"
+      ],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

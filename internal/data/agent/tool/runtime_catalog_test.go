@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -60,7 +61,11 @@ func TestToolCatalogReadWriteAndCommandTools(t *testing.T) {
 		t.Fatalf("readFile() output = %q", readOut)
 	}
 
-	cmdOut, err := tools.execCommand(ctx, "Get-Content notes\\demo.txt")
+	cmd := "cat notes/demo.txt"
+	if runtime.GOOS == "windows" {
+		cmd = "Get-Content notes\\demo.txt"
+	}
+	cmdOut, err := tools.execCommand(ctx, cmd)
 	if err != nil {
 		t.Fatalf("execCommand() error = %v", err)
 	}
