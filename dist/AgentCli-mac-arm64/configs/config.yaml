@@ -1,0 +1,31 @@
+server:
+  http:
+    network: tcp
+    addr: 0.0.0.0:8000
+    timeout: 1
+  grpc:
+    network: tcp
+    addr: 0.0.0.0:9000
+    timeout: 1
+data:
+  database:
+    driver: memory
+    source: demo
+  agent_memory:
+    dir: .myagent
+    user_id: default
+    context_compress_threshold: 200000
+    keep_recent_turns: 24  # 压缩时保留的最近对话轮次组（human 或 ai+tool），非单条 turn 数
+    tool_output_max_chars: 8000
+ai:
+  openai:
+    # api_key / base_url 由 CLI 写入 .myagent/credentials.json，此处留空
+    # api_key: ""
+    # base_url: ""
+    model: gpt-5.4-mini
+    timeout_seconds: 180
+runtime:
+  remotes:
+    - agent: coder
+      target: 127.0.0.1:9001
+      timeout: 8

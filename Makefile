@@ -15,7 +15,11 @@ BIN_MAC_ARM64 := $(BIN_DIR)/kratos-demo-darwin-arm64
 BIN_MAC_AMD64 := $(BIN_DIR)/kratos-demo-darwin-amd64
 BIN_WIN := $(BIN_DIR)/kratos-demo.exe
 
-.PHONY: config proto wire build build-bin build-mac build-win cli cli-bin run run-bin
+DIST_WIN := dist/AgentCli-win64
+DIST_MAC := dist/AgentCli-mac-arm64
+RELEASE_NAME := AgentCli
+
+.PHONY: config proto wire build build-bin build-mac build-win release-win release-mac cli cli-bin run run-bin
 
 config:
 	$(PROTOC) --proto_path=. --go_out=paths=source_relative:. internal/conf/conf.proto
@@ -50,15 +54,30 @@ build-win:
 	GOOS=windows GOARCH=amd64 go build -o $(BIN_WIN) $(MAIN)
 	@echo "built $(BIN_WIN)"
 
+# 可分发给 Windows 用户的目录：exe + configs + 说明
+release-win: build-win
+	@mkdir -p $(DIST_WIN)/configs
+	cp $(BIN_WIN) $(DIST_WIN)/$(RELEASE_NAME).exe
+	cp configs/config.yaml $(DIST_WIN)/configs/config.yaml
+	@echo "release ready: $(DIST_WIN)/"
+	@echo "  $(RELEASE_NAME).exe -cli"
+
+release-mac: build-bin
+	@mkdir -p $(DIST_MAC)/configs
+	cp $(BIN) $(DIST_MAC)/$(RELEASE_NAME)
+	cp configs/config.yaml $(DIST_MAC)/configs/config.yaml
+	@echo "release ready: $(DIST_MAC)/"
+	@echo "  ./$(RELEASE_NAME) -cli"
+
 cli:
-	go run $(MAIN) -conf ./configs -cli
+	go run $(MAIN) -cli
 
 # 使用已编译的原生二进制启动 CLI（先 make build-bin）
 cli-bin: build-bin
-	$(BIN) -conf ./configs -cli
+	$(BIN) -cli
 
 run:
-	go run $(MAIN) -conf ./configs
+	go run $(MAIN)
 
 run-bin: build-bin
-	$(BIN) -conf ./configs
+	$(BIN)

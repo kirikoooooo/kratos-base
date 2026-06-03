@@ -24,7 +24,7 @@ var (
 )
 
 func init() {
-	flag.StringVar(&flagconf, "conf", "../../configs", "config path, eg: -conf config.yaml")
+	flag.StringVar(&flagconf, "conf", "", "config directory or file; default: configs/ next to executable")
 	flag.BoolVar(&flagCLI, "cli", false, "interactive local CLI (starts all agents, router-first)")
 }
 
@@ -36,20 +36,28 @@ func main() {
 		log.SetLogger(log.NewStdLogger(io.Discard))
 	}
 
+	confPath, err := conf.EnsureConfigPath(flagconf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "config error: %v\n", err)
+		os.Exit(1)
+	}
+
 	c := config.New(
 		config.WithSource(
-			file.NewSource(flagconf),
+			file.NewSource(confPath),
 		),
 	)
 	defer c.Close()
 
 	if err := c.Load(); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "config load error: %v\n", err)
+		os.Exit(1)
 	}
 
 	var bc conf.Bootstrap
 	if err := c.Scan(&bc); err != nil {
-		panic(err)
+		fmt.Fprintf(os.Stderr, "config parse error: %v\n", err)
+		os.Exit(1)
 	}
 
 	if flagCLI {
