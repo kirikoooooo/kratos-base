@@ -45,10 +45,29 @@ func (t *selectTerminal) leave() {
 	}
 }
 
-// promptArrowSelect shows an interactive menu (↑/↓ + Enter).
+// promptArrowSelect shows an interactive menu (↑/↓ + Enter) for boolean options.
 func promptArrowSelect(out io.Writer, in io.Reader, paint func(string, string) string, options []selectOption, defaultIndex int) (bool, error) {
+	labels := make([]string, len(options))
+	values := make([]bool, len(options))
+	for i, opt := range options {
+		labels[i] = opt.Label
+		values[i] = opt.Value
+	}
+	idx, err := promptSelect(out, in, paint, labels, "  ↑↓ 选择 · Enter 确认 · Esc 拒绝", defaultIndex)
+	if err != nil {
+		return false, err
+	}
+	if idx < 0 {
+		return false, nil
+	}
+	return values[idx], nil
+}
+
+// promptSelect shows an interactive menu (↑/↓ + Enter) for string-labelled options.
+// Returns the selected index, or -1 if the user cancelled (Esc/Ctrl+C).
+func promptSelect(out io.Writer, in io.Reader, paint func(string, string) string, options []string, hint string, defaultIndex int) (int, error) {
 	if len(options) == 0 {
-		return false, fmt.Errorf("select: no options")
+		return -1, fmt.Errorf("select: no options")
 	}
 	if defaultIndex < 0 || defaultIndex >= len(options) {
 		defaultIndex = 0
@@ -56,19 +75,19 @@ func promptArrowSelect(out io.Writer, in io.Reader, paint func(string, string) s
 
 	termUI, ok := newSelectTerminal(out, in)
 	if !ok {
-		return options[defaultIndex].Value, nil
+		return defaultIndex, nil
 	}
 	if err := termUI.enter(); err != nil {
-		return options[defaultIndex].Value, err
+		return defaultIndex, err
 	}
 	defer termUI.leave()
 
 	fmt.Fprint(out, "\033[?25l")
 	selected := defaultIndex
-	hint := paint(ansiDim, "  ↑↓ 选择 · Enter 确认 · Esc 拒绝")
+	paintedHint := paint(ansiDim, hint)
 
 	draw := func() {
-		lines := buildSelectLines(hint, options, selected, paint)
+		lines := buildModelSelectLines(paintedHint, options, selected, paint)
 		termUI.lineCount = writeSelectLines(out, lines, termUI.lineCount)
 		flushOut(out)
 	}
@@ -89,7 +108,7 @@ func promptArrowSelect(out io.Writer, in io.Reader, paint func(string, string) s
 		key, err := readTerminalKey(termUI.in)
 		if err != nil {
 			clearMenu()
-			return false, err
+			return -1, err
 		}
 		switch key {
 		case keyUp:
@@ -104,21 +123,21 @@ func promptArrowSelect(out io.Writer, in io.Reader, paint func(string, string) s
 			}
 		case keyEnter:
 			clearMenu()
-			return options[selected].Value, nil
+			return selected, nil
 		case keyEscape, keyCtrlC:
 			clearMenu()
-			return false, nil
+			return -1, nil
 		}
 	}
 }
 
-func buildSelectLines(hint string, options []selectOption, selected int, paint func(string, string) string) []string {
+func buildModelSelectLines(hint string, options []string, selected int, paint func(string, string) string) []string {
 	lines := make([]string, 0, 2+len(options))
 	lines = append(lines, hint, "")
-	for i, opt := range options {
-		row := "    " + opt.Label
+	for i, label := range options {
+		row := "    " + label
 		if i == selected {
-			row = paint(ansiCyan, "  ❯ ") + paint(ansiBold, opt.Label)
+			row = paint(ansiCyan, "  ❯ ") + paint(ansiBold, label)
 		}
 		lines = append(lines, row)
 	}

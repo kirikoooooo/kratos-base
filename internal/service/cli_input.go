@@ -32,6 +32,7 @@ func newCLILineReader(in io.Reader, ui *cliUI, onShiftTab func()) (*cliLineReade
 			FuncFilterInputRune:    filterCLIInputRune,
 			InterruptPrompt:        "^C",
 			EOFPrompt:              "exit",
+				AutoComplete:           slashCommandCompleter(),
 		})
 		if err != nil {
 			return nil, err
@@ -163,4 +164,27 @@ func sanitizeCLIInput(line string) string {
 		return r
 	}, line)
 	return strings.TrimSpace(line)
+}
+
+// slashCommandCompleter builds a Tab completer for all slash commands.
+// Press Tab to autocomplete or see available commands in a grid.
+func slashCommandCompleter() *readline.PrefixCompleter {
+	items := []readline.PrefixCompleterInterface{
+		readline.PcItem("/help"),
+		readline.PcItem("/agents"),
+		readline.PcItem("/session"),
+		readline.PcItem("/new"),
+		readline.PcItem("/model"),
+		readline.PcItem("/mode",
+			readline.PcItem("ask"),
+			readline.PcItem("agent"),
+			readline.PcItem("auto"),
+		),
+		readline.PcItem("/config",
+			readline.PcItem("api_key"),
+			readline.PcItem("base_url"),
+		),
+		readline.PcItem("/exit"),
+	}
+	return readline.NewPrefixCompleter(items...)
 }

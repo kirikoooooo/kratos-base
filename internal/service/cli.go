@@ -358,8 +358,15 @@ func (c *CLIService) handleCommand(line string) bool {
 	case "/mode":
 		c.onShiftTabMode()
 		return true
+	case "/model":
+		c.showModelSelect()
+		return true
 	default:
 		if c.handleConfigCommand(line) {
+			return true
+		}
+		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "/model ") {
+			c.handleModelSwitch(strings.TrimPrefix(strings.ToLower(strings.TrimSpace(line)), "/model "))
 			return true
 		}
 		if strings.HasPrefix(strings.ToLower(strings.TrimSpace(line)), "/mode ") {

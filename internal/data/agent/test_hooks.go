@@ -9,6 +9,7 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"kratos-demo/internal/conf"
+	"kratos-demo/internal/data/agent/provider"
 )
 
 type fakeLLM struct{}
@@ -29,18 +30,19 @@ func (fakeLLM) Call(_ context.Context, prompt string, _ ...llms.CallOption) (str
 	return prompt, nil
 }
 
+type fakeProvider struct{}
+
+func (fakeProvider) CreateModel(_ ...provider.ModelOption) (llms.Model, error) {
+	return fakeLLM{}, nil
+}
+
 func WithFakeRuntimeLLM(t *testing.T) {
 	t.Helper()
-	prev := newRuntimeLLM
-	prevPurpose := newRuntimeLLMForPurpose
-	newRuntimeLLM = func(_ *conf.AI, _ *log.Helper) (llms.Model, error) {
-		return fakeLLM{}, nil
-	}
-	newRuntimeLLMForPurpose = func(_ *conf.AI, _ *log.Helper, _ string) (llms.Model, error) {
-		return fakeLLM{}, nil
+	prev := newProviderFn
+	newProviderFn = func(_ *conf.AI, _ *log.Helper) (provider.LLMProvider, error) {
+		return fakeProvider{}, nil
 	}
 	t.Cleanup(func() {
-		newRuntimeLLM = prev
-		newRuntimeLLMForPurpose = prevPurpose
+		newProviderFn = prev
 	})
 }

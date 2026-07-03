@@ -5,7 +5,7 @@ server:
     timeout: 1
   grpc:
     network: tcp
-    addr: 0.0.0.0:9000
+    addr: 0.0.0.0:50051
     timeout: 1
 data:
   database:
@@ -18,11 +18,17 @@ data:
     keep_recent_turns: 24  # 压缩时保留的最近对话轮次组（human 或 ai+tool），非单条 turn 数
     tool_output_max_chars: 8000
 ai:
+  provider: deepseek
   openai:
     # api_key / base_url 由 CLI 写入 .myagent/credentials.json，此处留空
     # api_key: ""
     # base_url: ""
     model: gpt-5.4-mini
+    timeout_seconds: 180
+  deepseek:
+    # api_key: ""
+    # base_url: ""  # 默认 https://api.deepseek.com
+    model: deepseek-v4-flash
     timeout_seconds: 180
 runtime:
   remotes:

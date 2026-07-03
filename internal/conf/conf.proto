@@ -20,7 +20,17 @@ message AI {
     int64 timeout_seconds = 4;
   }
 
+  message DeepSeek {
+    string api_key = 1;
+    string base_url = 2;
+    string model = 3;
+    int64 timeout_seconds = 4;
+  }
+
   OpenAI openai = 1;
+  DeepSeek deepseek = 2;
+  // LLM 厂商：openai / deepseek。默认 openai
+  string provider = 3;
 }
 
 message Server {

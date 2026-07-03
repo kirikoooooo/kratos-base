@@ -94,7 +94,7 @@ func (u *cliUI) printWelcome(sessionID, logPath string) {
 	if logPath = strings.TrimSpace(logPath); logPath != "" {
 		u.println(u.dim("  logs    ") + logPath)
 	}
-	u.println(u.dim("  tips      ") + "/help · /config · /new · /exit · Shift+Tab 切换权限")
+	u.println(u.dim("  tips      ") + "/help · /config · /model · /new · /exit · Shift+Tab 切换权限")
 	u.println(u.dim("  safety    ") + "ask/agent/auto · 高风险操作 ↑↓ 选择 Enter 确认")
 	u.println(u.dim("  ctrl+c    ") + "生成中：首次停止 · 再次退出 · 空闲时连按两次退出")
 	u.println("")
@@ -112,7 +112,8 @@ func (u *cliUI) printHelp() {
 	u.println(u.dim("  /session  ") + "session id")
 	u.println(u.dim("  /new      ") + "new session")
 	u.println(u.dim("  /mode     ") + "permission mode (ask/agent/auto)")
-	u.println(u.dim("  /config   ") + "OpenAI API key / base URL")
+	u.println(u.dim("  /config   ") + "API key / base URL")
+	u.println(u.dim("  /model    ") + "show / switch model")
 	u.println(u.dim("  /exit     ") + "quit")
 	u.println("")
 	u.println(u.dim("  Shift+Tab ") + "cycle permission: ask → agent → auto")

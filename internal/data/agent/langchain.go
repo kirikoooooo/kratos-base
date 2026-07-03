@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"net"
-	"net/http"
 	"strings"
 	"time"
 
@@ -17,6 +15,7 @@ import (
 	agentcontext "kratos-demo/internal/data/agent/context"
 	agentctx "kratos-demo/internal/data/agent/ctx"
 	agentmemory "kratos-demo/internal/data/agent/memory"
+	"kratos-demo/internal/data/agent/provider"
 	agenttool "kratos-demo/internal/data/agent/tool"
 	datasession "kratos-demo/internal/data/session"
 	datatrace "kratos-demo/internal/data/trace"
@@ -25,14 +24,11 @@ import (
 
 	"github.com/go-kratos/kratos/v2/log"
 	"github.com/tmc/langchaingo/llms"
-	"github.com/tmc/langchaingo/llms/openai"
 	grpcclient "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 )
 
 const (
-	defaultOpenAIModel      = "gpt-4o-mini"
-	defaultOpenAITimeout    = 120 * time.Second
 	defaultRemoteTimeout    = 8 * time.Second
 	runtimeActorPID         = 9001
 	maxToolLoopIterations   = 12
@@ -48,84 +44,7 @@ const (
 语气清晰、具体，不要输出占位语或空内容。`
 )
 
-var newRuntimeLLM = func(config *conf.AI, logger *log.Helper) (llms.Model, error) {
-	return newRuntimeLLMForPurpose(config, logger, "")
-}
-
-var newRuntimeLLMForPurpose = func(config *conf.AI, logger *log.Helper, purpose string) (llms.Model, error) {
-	if config == nil {
-		return nil, errors.New("ai config is nil")
-	}
-	apiKey := strings.TrimSpace(config.GetOpenai().GetApiKey())
-	if apiKey == "" {
-		err := errors.New("ai.openai.api_key is empty")
-		logger.Warn(err.Error())
-		return nil, err
-	}
-
-	model := strings.TrimSpace(config.GetOpenai().GetModel())
-	if model == "" {
-		model = defaultOpenAIModel
-	}
-	if purpose == "function_calling" {
-		model = normalizeFunctionCallingModel(model)
-	}
-
-	options := []openai.Option{
-		openai.WithToken(apiKey),
-		openai.WithModel(model),
-	}
-	if baseURL := strings.TrimSpace(config.GetOpenai().GetBaseUrl()); baseURL != "" {
-		options = append(options, openai.WithBaseURL(baseURL))
-	}
-	options = append(options, openai.WithHTTPClient(newOpenAIHTTPClient(openAITimeoutFromConfig(config))))
-
-	modelClient, err := openai.New(options...)
-	if err != nil {
-		logger.Warnf("create openai compatible llm failed: %v", err)
-		return nil, fmt.Errorf("create openai compatible llm failed: %w", err)
-	}
-	return modelClient, nil
-}
-
-func openAITimeoutFromConfig(config *conf.AI) time.Duration {
-	if config == nil || config.GetOpenai() == nil {
-		return defaultOpenAITimeout
-	}
-	if seconds := config.GetOpenai().GetTimeoutSeconds(); seconds > 0 {
-		return time.Duration(seconds) * time.Second
-	}
-	return defaultOpenAITimeout
-}
-
-func newOpenAIHTTPClient(timeout time.Duration) *http.Client {
-	if timeout <= 0 {
-		timeout = defaultOpenAITimeout
-	}
-	dialTimeout := 30 * time.Second
-	if timeout < dialTimeout {
-		dialTimeout = timeout
-	}
-	tlsTimeout := 30 * time.Second
-	if timeout < tlsTimeout {
-		tlsTimeout = timeout
-	}
-	return &http.Client{
-		Timeout: timeout,
-		Transport: &http.Transport{
-			Proxy: http.ProxyFromEnvironment,
-			DialContext: (&net.Dialer{
-				Timeout:   dialTimeout,
-				KeepAlive: 30 * time.Second,
-			}).DialContext,
-			TLSHandshakeTimeout:   tlsTimeout,
-			ResponseHeaderTimeout: timeout,
-			ExpectContinueTimeout: 1 * time.Second,
-			MaxIdleConns:          16,
-			IdleConnTimeout:       90 * time.Second,
-		},
-	}
-}
+var newProviderFn = provider.NewProvider
 
 type langChainAgentRuntime struct {
 	config         *conf.AI
@@ -134,6 +53,7 @@ type langChainAgentRuntime struct {
 	pid            actorpkg.PID
 	trace          datatrace.DelegationTraceStore
 	memory         agentmemory.AgentMemory
+	pvd            provider.LLMProvider
 	localTools     *agenttool.Runtime
 	localToolsErr  error
 	toolCatalog    *toolcatalog.Catalog
@@ -157,6 +77,7 @@ func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatra
 		pid:            actorpkg.NewPID(runtimeActorPID, "langchain-runtime"),
 		trace:          trace,
 		memory:         memory,
+		pvd:            nil,
 		localTools:     localTools,
 		localToolsErr:  localToolsErr,
 		toolCatalog:    catalog,
@@ -395,11 +316,32 @@ func (r *langChainAgentRuntime) runReviewer(ctx context.Context, prompt string) 
 }
 
 func (r *langChainAgentRuntime) newLLM() (llms.Model, error) {
-	return newRuntimeLLM(r.config, r.log)
+	pvd, err := r.getProvider()
+	if err != nil {
+		return nil, err
+	}
+	return pvd.CreateModel()
 }
 
 func (r *langChainAgentRuntime) newFunctionCallingLLM() (llms.Model, error) {
-	return newRuntimeLLMForPurpose(r.config, r.log, "function_calling")
+	pvd, err := r.getProvider()
+	if err != nil {
+		return nil, err
+	}
+	return pvd.CreateModel(provider.WithFunctionCalling())
+}
+
+// getProvider 懒加载 provider，每次调用时检查 r.config 是否已更新（如 CLI 凭证注入后）。
+func (r *langChainAgentRuntime) getProvider() (provider.LLMProvider, error) {
+	if r.pvd != nil {
+		return r.pvd, nil
+	}
+	pvd, err := newProviderFn(r.config, r.log)
+	if err != nil {
+		return nil, err
+	}
+	r.pvd = pvd
+	return r.pvd, nil
 }
 
 type managedToolset struct {
@@ -1187,15 +1129,4 @@ func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID str
 		}
 	}
 	return result, err
-}
-
-func normalizeFunctionCallingModel(model string) string {
-	model = strings.TrimSpace(model)
-	if model == "" {
-		return defaultOpenAIModel
-	}
-	if strings.HasPrefix(strings.ToLower(model), "gpt-5") {
-		return defaultOpenAIModel
-	}
-	return model
 }

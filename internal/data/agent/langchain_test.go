@@ -62,22 +62,20 @@ func TestAgentRuntimeReceiveTaskAcceptsDefaultProfile(t *testing.T) {
 	}
 }
 
-func TestNormalizeFunctionCallingModel(t *testing.T) {
-	tests := []struct {
-		name  string
-		input string
-		want  string
-	}{
-		{name: "blank", input: "", want: defaultOpenAIModel},
-		{name: "gpt5 fallback", input: "gpt-5.4-mini", want: defaultOpenAIModel},
-		{name: "compatible model kept", input: "gpt-4o-mini", want: "gpt-4o-mini"},
-	}
+func TestFakeProviderCreatesLLM(t *testing.T) {
+	WithFakeRuntimeLLM(t)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := normalizeFunctionCallingModel(tt.input); got != tt.want {
-				t.Fatalf("normalizeFunctionCallingModel(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
+	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, nil, nil, nil, log.NewStdLogger(io.Discard))
+
+	result, err := runtime.Execute(context.Background(), biz.AgentReviewer, "请审查代码")
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+	if result == nil {
+		t.Fatal("expected non-nil task result")
+	}
+	if result.GetOutput() == "" {
+		t.Fatal("expected non-empty task result output")
 	}
 }

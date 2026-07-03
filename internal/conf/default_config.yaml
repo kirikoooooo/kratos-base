@@ -21,6 +21,9 @@ ai:
   openai:
     model: gpt-5.4-mini
     timeout_seconds: 180
+  deepseek:
+    model: deepseek-v4-flash
+    timeout_seconds: 180
 runtime:
   remotes:
     - agent: coder
