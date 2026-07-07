@@ -3,7 +3,7 @@ package memory
 import (
 	"context"
 
-	bizagent "kratos-demo/internal/biz/agent"
+	bizagent "kratos-demo/internal/biz/agent_runtime"
 	bizconversation "kratos-demo/internal/biz/conversation"
 )
 

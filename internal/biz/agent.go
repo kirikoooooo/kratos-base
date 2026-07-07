@@ -2,47 +2,47 @@ package biz
 
 import (
 	bizagent "kratos-demo/internal/biz/agent"
+	bizagentruntime "kratos-demo/internal/biz/agent_runtime"
 
 	"github.com/google/wire"
 )
 
-// Re-export from biz/agent sub-package for backward compatibility.
+// Re-export Agent domain object from biz/agent.
 type (
-	// Agent is the domain-level orchestrator (aggregate root).
-	Agent                = bizagent.Agent
-	// AgentKind identifies a specific agent role (e.g. coder, reviewer).
-	AgentKind            = bizagent.AgentKind
-	// AgentRuntime is the core abstraction for agent runtime implementations.
-	AgentRuntime         = bizagent.AgentRuntime
-	// DelegationVerifier is an optional delegation verification capability.
-	DelegationVerifier   = bizagent.DelegationVerifier
-	// AgentRuntimeUsecase is a backward-compatible alias for Agent.
-	AgentRuntimeUsecase  = bizagent.AgentRuntimeUsecase
+	Agent               = bizagent.Agent
+	AgentRuntimeUsecase = bizagent.AgentRuntimeUsecase // = Agent
+)
+
+// Re-export AgentRuntime port types from biz/agent_runtime.
+type (
+	AgentKind          = bizagentruntime.AgentKind
+	AgentRuntime       = bizagentruntime.AgentRuntime
+	DelegationVerifier = bizagentruntime.DelegationVerifier
 )
 
 var (
-	// AgentKind constants — role identifiers for agent dispatch.
-	AgentKindDefault  = bizagent.AgentKindDefault
-	AgentKindGeneric  = bizagent.AgentKindGeneric
-	AgentKindRouter   = bizagent.AgentKindRouter
-	AgentKindCoder    = bizagent.AgentKindCoder
-	AgentKindReviewer = bizagent.AgentKindReviewer
+	// AgentKind constants.
+	AgentKindDefault  = bizagentruntime.AgentKindDefault
+	AgentKindGeneric  = bizagentruntime.AgentKindGeneric
+	AgentKindRouter   = bizagentruntime.AgentKindRouter
+	AgentKindCoder    = bizagentruntime.AgentKindCoder
+	AgentKindReviewer = bizagentruntime.AgentKindReviewer
 
 	// Deprecated: use AgentKind constants.
-	AgentDefault  = bizagent.AgentKindDefault
-	AgentGeneric  = bizagent.AgentKindGeneric
-	AgentRouter   = bizagent.AgentKindRouter
-	AgentCoder    = bizagent.AgentKindCoder
-	AgentReviewer = bizagent.AgentKindReviewer
+	AgentDefault  = bizagentruntime.AgentKindDefault
+	AgentGeneric  = bizagentruntime.AgentKindGeneric
+	AgentRouter   = bizagentruntime.AgentKindRouter
+	AgentCoder    = bizagentruntime.AgentKindCoder
+	AgentReviewer = bizagentruntime.AgentKindReviewer
 
 	// Error sentinels.
-	ErrAgentRuntimeUnavailable = bizagent.ErrAgentRuntimeUnavailable
-	ErrAgentNotSupported       = bizagent.ErrAgentNotSupported
-	ErrDelegationNotSupported  = bizagent.ErrDelegationNotSupported
+	ErrAgentRuntimeUnavailable = bizagentruntime.ErrAgentRuntimeUnavailable
+	ErrAgentNotSupported       = bizagentruntime.ErrAgentNotSupported
+	ErrDelegationNotSupported  = bizagentruntime.ErrDelegationNotSupported
 
 	// Constructors.
-	NewAgent                = bizagent.NewAgent
-	NewAgentRuntimeUsecase  = bizagent.NewAgentRuntimeUsecase
+	NewAgent               = bizagent.NewAgent
+	NewAgentRuntimeUsecase = bizagent.NewAgentRuntimeUsecase
 )
 
-var ProviderSet = wire.NewSet(bizagent.ProviderSet)
+var ProviderSet = wire.NewSet(bizagent.ProviderSet, bizagentruntime.ProviderSet)

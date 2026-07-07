@@ -1,4 +1,4 @@
-package agent
+package agent_runtime
 
 // AgentKind identifies a specific agent role/capability (e.g. coder, reviewer).
 type AgentKind string
