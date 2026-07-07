@@ -13,7 +13,7 @@ import (
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/data"
 	"kratos-demo/internal/data/agent"
-	"kratos-demo/internal/data/agent/memory"
+	"kratos-demo/internal/data/memory"
 	"kratos-demo/internal/data/session"
 	"kratos-demo/internal/data/tasking"
 	"kratos-demo/internal/data/trace"

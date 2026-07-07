@@ -1,6 +1,6 @@
 package agent
 
-import agentmemory "kratos-demo/internal/data/agent/memory"
+import agentmemory "kratos-demo/internal/data/memory"
 
 type (
 	AgentMemory          = agentmemory.AgentMemory

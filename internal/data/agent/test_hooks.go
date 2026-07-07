@@ -9,7 +9,7 @@ import (
 	"github.com/tmc/langchaingo/llms"
 
 	"kratos-demo/internal/conf"
-	"kratos-demo/internal/data/agent/provider"
+	"kratos-demo/internal/data/provider"
 )
 
 type fakeLLM struct{}
