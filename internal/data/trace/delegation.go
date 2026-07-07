@@ -9,7 +9,7 @@ import (
 )
 
 type DelegationTraceStore interface {
-	StartTask(taskID string, agent biz.Agent, status string)
+	StartTask(taskID string, agent biz.AgentKind, status string)
 	UpdateTask(taskID string, status string, result *taskv1.TaskResult, err error)
 	AppendEvent(event DelegationEvent)
 	UpdatePlan(taskID string, steps []PlanStep)

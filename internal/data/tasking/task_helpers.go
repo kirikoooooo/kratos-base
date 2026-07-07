@@ -9,11 +9,11 @@ import (
 	"kratos-demo/internal/data/common"
 )
 
-func agentName(agent biz.Agent) string {
+func agentName(agent biz.AgentKind) string {
 	return string(agent)
 }
 
-func isEmptyAgent(agent biz.Agent) bool {
+func isEmptyAgent(agent biz.AgentKind) bool {
 	return strings.TrimSpace(agentName(agent)) == ""
 }
 

@@ -28,7 +28,7 @@ func TestCLIServiceStartsAllAgentsAndHandlesHelp(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	for _, agent := range []biz.Agent{biz.AgentDefault, biz.AgentRouter, biz.AgentCoder, biz.AgentReviewer} {
+	for _, agent := range []biz.AgentKind{biz.AgentKindDefault, biz.AgentKindRouter, biz.AgentKindCoder, biz.AgentKindReviewer} {
 		if !dash.isAgentStarted(agent) {
 			t.Fatalf("agent %s was not started", agent)
 		}

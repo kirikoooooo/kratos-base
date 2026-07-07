@@ -10,7 +10,7 @@ import (
 	actorpkg "kratos-demo/third_party/actor"
 
 	"github.com/go-kratos/kratos/v2/log"
-	dataagent "kratos-demo/internal/data/agent"
+	dataagent "kratos-demo/internal/data/agent_runtime"
 	datatrace "kratos-demo/internal/data/trace"
 )
 
@@ -49,7 +49,7 @@ func (d *taskDispatcher) Dispatch(ctx context.Context, task *Task) error {
 	if d.runtime == nil {
 		return fmt.Errorf("%w: runtime is nil", dataagent.ErrAgentNotSupported)
 	}
-	if !d.runtime.Supports(biz.Agent(cmd.Agent)) {
+	if !d.runtime.Supports(biz.AgentKind(cmd.Agent)) {
 		return fmt.Errorf("%w: %s", dataagent.ErrAgentNotSupported, cmd.Agent)
 	}
 

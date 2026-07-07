@@ -23,11 +23,11 @@ func (m dashboardMux) HandleFunc(pattern string, handler http.HandlerFunc) {
 
 func TestDashboardStateIncludesToolTimeline(t *testing.T) {
 	trace := datatrace.NewDelegationTraceStore()
-	trace.StartTask("session-1", biz.AgentDefault, string(datatasking.TaskStatusDone))
+	trace.StartTask("session-1", biz.AgentKindDefault, string(datatasking.TaskStatusDone))
 	trace.AppendEvent(datatrace.DelegationEvent{
 		Time:          time.Now(),
 		TaskID:        "session-1",
-		Agent:         string(biz.AgentDefault),
+		Agent:         string(biz.AgentKindDefault),
 		Stage:         "tool_read_file",
 		PromptPreview: "README.md",
 		Summary:       "path: README.md",

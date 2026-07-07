@@ -8,7 +8,7 @@ import (
 
 	datasession "kratos-demo/internal/data/session"
 	datatrace "kratos-demo/internal/data/trace"
-	agentctx "kratos-demo/internal/data/agent/ctx"
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 )
 
 func TestEditFileRecordsSessionChange(t *testing.T) {

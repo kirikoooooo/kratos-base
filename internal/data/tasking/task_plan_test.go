@@ -8,7 +8,7 @@ import (
 )
 
 func TestInitialPlanAndAdvance(t *testing.T) {
-	plan := initialPlan(biz.AgentDefault, "请读 README 然后总结")
+	plan := initialPlan(biz.AgentKindDefault, "请读 README 然后总结")
 	if len(plan) < 4 {
 		t.Fatalf("initialPlan() steps = %d, want >= 4", len(plan))
 	}

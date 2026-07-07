@@ -17,9 +17,9 @@ import (
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
 	datatasking "kratos-demo/internal/data/tasking"
-	dataagent "kratos-demo/internal/data/agent"
+	dataagent "kratos-demo/internal/data/agent_runtime"
 	datatrace "kratos-demo/internal/data/trace"
-	agentctx "kratos-demo/internal/data/agent/ctx"
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 
 	"github.com/go-kratos/kratos/v2/log"
 )

@@ -7,11 +7,11 @@ import (
 	datatrace "kratos-demo/internal/data/trace"
 )
 
-func InitialPlan(agent biz.Agent, prompt string) []datatrace.PlanStep {
+func InitialPlan(agent biz.AgentKind, prompt string) []datatrace.PlanStep {
 	return initialPlan(agent, prompt)
 }
 
-func initialPlan(agent biz.Agent, prompt string) []datatrace.PlanStep {
+func initialPlan(agent biz.AgentKind, prompt string) []datatrace.PlanStep {
 	steps := []datatrace.PlanStep{
 		{
 			ID:          "understand",
@@ -79,12 +79,12 @@ func advancePlan(steps []datatrace.PlanStep, event datatrace.DelegationEvent) []
 	return next
 }
 
-func planExecuteDescription(agent biz.Agent, prompt string) string {
+func planExecuteDescription(agent biz.AgentKind, prompt string) string {
 	text := strings.TrimSpace(prompt)
 	switch agent {
-	case biz.AgentRouter:
+	case biz.AgentKindRouter:
 		return "?????????????????????"
-	case biz.AgentCoder:
+	case biz.AgentKindCoder:
 		return "????????????"
 	default:
 		if strings.Contains(text, "??") || strings.Contains(text, "??") {
@@ -94,8 +94,8 @@ func planExecuteDescription(agent biz.Agent, prompt string) string {
 	}
 }
 
-func needsDelegation(prompt string, agent biz.Agent) bool {
-	if agent == biz.AgentRouter {
+func needsDelegation(prompt string, agent biz.AgentKind) bool {
+	if agent == biz.AgentKindRouter {
 		return true
 	}
 	text := strings.ToLower(strings.TrimSpace(prompt))

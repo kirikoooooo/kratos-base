@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	agentctx "kratos-demo/internal/data/agent/ctx"
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 	"kratos-demo/internal/biz"
 	datatrace "kratos-demo/internal/data/trace"
 )
@@ -204,6 +204,6 @@ func setupLocalToolsTest(t *testing.T) (*Runtime, context.Context, string) {
 		_ = os.Chdir(prevWD)
 	})
 	tools.root = dir
-	ctx := agentctx.WithAgent(agentctx.WithTaskID(context.Background(), "edit-tool-task"), biz.AgentDefault)
+	ctx := agentctx.WithAgent(agentctx.WithTaskID(context.Background(), "edit-tool-task"), biz.AgentKindDefault)
 	return tools, ctx, dir
 }

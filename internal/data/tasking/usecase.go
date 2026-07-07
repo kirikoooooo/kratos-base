@@ -67,14 +67,14 @@ func (uc *TaskUsecase) Get(ctx context.Context, id string) (*Task, error) {
 	return uc.repo.Get(ctx, id)
 }
 
-func NormalizeAgent(agent string) biz.Agent {
+func NormalizeAgent(agent string) biz.AgentKind {
 	agent = strings.TrimSpace(strings.ToLower(agent))
 	if agent == "" {
-		return biz.AgentDefault
+		return biz.AgentKindDefault
 	}
-	switch biz.Agent(agent) {
-	case biz.AgentDefault, biz.AgentGeneric:
-		return biz.AgentDefault
+	switch biz.AgentKind(agent) {
+	case biz.AgentKindDefault, biz.AgentKindGeneric:
+		return biz.AgentKindDefault
 	}
-	return biz.Agent(agent)
+	return biz.AgentKind(agent)
 }

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	agentctx "kratos-demo/internal/data/agent/ctx"
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 )
 
 var ErrRiskApprovalDenied = errors.New("operation denied by user")

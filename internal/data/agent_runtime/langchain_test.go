@@ -17,15 +17,15 @@ func TestAgentRuntimeSupportsGenericDefaultProfile(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		agent biz.Agent
+		agent biz.AgentKind
 		want  bool
 	}{
-		{name: "default profile", agent: biz.AgentDefault, want: true},
-		{name: "generic alias", agent: biz.AgentGeneric, want: true},
-		{name: "router compatibility", agent: biz.AgentRouter, want: true},
-		{name: "coder compatibility", agent: biz.AgentCoder, want: true},
-		{name: "reviewer compatibility", agent: biz.AgentReviewer, want: true},
-		{name: "unknown profile", agent: biz.Agent("planner"), want: false},
+		{name: "default profile", agent: biz.AgentKindDefault, want: true},
+		{name: "generic alias", agent: biz.AgentKindGeneric, want: true},
+		{name: "router compatibility", agent: biz.AgentKindRouter, want: true},
+		{name: "coder compatibility", agent: biz.AgentKindCoder, want: true},
+		{name: "reviewer compatibility", agent: biz.AgentKindReviewer, want: true},
+		{name: "unknown profile", agent: biz.AgentKind("planner"), want: false},
 	}
 
 	for _, tt := range tests {
@@ -44,7 +44,7 @@ func TestAgentRuntimeReceiveTaskAcceptsDefaultProfile(t *testing.T) {
 
 	result, err := runtime.ReceiveTask(context.Background(), &taskv1.TaskCommand{
 		TaskID: "task-default-profile",
-		Agent:  string(biz.AgentDefault),
+		Agent:  string(biz.AgentKindDefault),
 		Prompt: "???????????",
 	})
 
@@ -67,7 +67,7 @@ func TestFakeProviderCreatesLLM(t *testing.T) {
 
 	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, nil, nil, nil, log.NewStdLogger(io.Discard))
 
-	result, err := runtime.Execute(context.Background(), biz.AgentReviewer, "请审查代码")
+	result, err := runtime.Execute(context.Background(), biz.AgentKindReviewer, "请审查代码")
 
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

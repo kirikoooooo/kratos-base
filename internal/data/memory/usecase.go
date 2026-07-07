@@ -9,7 +9,7 @@ import (
 
 	"kratos-demo/internal/biz"
 	bizconversation "kratos-demo/internal/biz/conversation"
-	agentcontext "kratos-demo/internal/data/agent/context"
+	agentcontext "kratos-demo/internal/data/agent_runtime/context"
 	datatrace "kratos-demo/internal/data/trace"
 )
 
@@ -32,7 +32,7 @@ func (uc *agentMemoryUsecase) UserID() string {
 	return normalizeMemoryUserID(uc.config.UserID)
 }
 
-func (uc *agentMemoryUsecase) StartConversation(ctx context.Context, sessionID string, agent biz.Agent, initialPrompt string) error {
+func (uc *agentMemoryUsecase) StartConversation(ctx context.Context, sessionID string, agent biz.AgentKind, initialPrompt string) error {
 	if uc == nil || uc.store == nil {
 		return nil
 	}
@@ -162,7 +162,7 @@ func (uc *agentMemoryUsecase) ConversationPreview(ctx context.Context, sessionID
 	return ""
 }
 
-func (uc *agentMemoryUsecase) PrepareForTask(ctx context.Context, sessionID string, agent biz.Agent) error {
+func (uc *agentMemoryUsecase) PrepareForTask(ctx context.Context, sessionID string, agent biz.AgentKind) error {
 	if uc == nil || uc.store == nil {
 		return nil
 	}

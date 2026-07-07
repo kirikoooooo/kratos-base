@@ -9,7 +9,7 @@ import (
 func TestUpdateContextUsageRecordsCompressCount(t *testing.T) {
 	trace := NewDelegationTraceStore().(*memoryTraceStore)
 	taskID := "ctx-task-1"
-	trace.StartTask(taskID, biz.AgentCoder, "running")
+	trace.StartTask(taskID, biz.AgentKindCoder, "running")
 
 	usage := newContextUsageSnapshot(210000, 200000, true)
 	compress := &ContextCompressResult{

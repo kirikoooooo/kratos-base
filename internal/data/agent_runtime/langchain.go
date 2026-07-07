@@ -12,8 +12,8 @@ import (
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/data/common"
-	agentcontext "kratos-demo/internal/data/agent/context"
-	agentctx "kratos-demo/internal/data/agent/ctx"
+	agentcontext "kratos-demo/internal/data/agent_runtime/context"
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 	agentmemory "kratos-demo/internal/data/memory"
 	"kratos-demo/internal/data/provider"
 	agenttool "kratos-demo/internal/data/tool"
@@ -112,16 +112,16 @@ func (r *langChainAgentRuntime) Name() string {
 	return "langchaingo-openai-runtime"
 }
 
-func (r *langChainAgentRuntime) Supports(agent biz.Agent) bool {
+func (r *langChainAgentRuntime) Supports(agent biz.AgentKind) bool {
 	switch agent {
-	case biz.AgentDefault, biz.AgentGeneric, biz.AgentRouter, biz.AgentCoder, biz.AgentReviewer:
+	case biz.AgentKindDefault, biz.AgentKindGeneric, biz.AgentKindRouter, biz.AgentKindCoder, biz.AgentKindReviewer:
 		return true
 	default:
 		return false
 	}
 }
 
-func (r *langChainAgentRuntime) Execute(ctx context.Context, agent biz.Agent, prompt string) (*taskv1.TaskResult, error) {
+func (r *langChainAgentRuntime) Execute(ctx context.Context, agent biz.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	normalized := normalizeRuntimeAgent(agent)
 	ctx = agentctx.WithAgent(ctx, normalized)
 	if r.memory != nil {
@@ -132,13 +132,13 @@ func (r *langChainAgentRuntime) Execute(ctx context.Context, agent biz.Agent, pr
 		}
 	}
 	switch normalized {
-	case biz.AgentDefault:
+	case biz.AgentKindDefault:
 		return r.runDefault(ctx, prompt)
-	case biz.AgentRouter:
+	case biz.AgentKindRouter:
 		return r.runRouter(ctx, prompt)
-	case biz.AgentCoder:
+	case biz.AgentKindCoder:
 		return r.runCoder(ctx, prompt)
-	case biz.AgentReviewer:
+	case biz.AgentKindReviewer:
 		return r.runReviewer(ctx, prompt)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrAgentNotSupported, agent)
@@ -149,7 +149,7 @@ func (r *langChainAgentRuntime) ReceiveTask(ctx context.Context, cmd *taskv1.Tas
 	if cmd == nil {
 		return nil, errors.New("task command is nil")
 	}
-	return r.Execute(agentctx.WithTaskID(ctx, cmd.TaskID), normalizeRuntimeAgent(biz.Agent(cmd.Agent)), cmd.Prompt)
+	return r.Execute(agentctx.WithTaskID(ctx, cmd.TaskID), normalizeRuntimeAgent(biz.AgentKind(cmd.Agent)), cmd.Prompt)
 }
 
 func (r *langChainAgentRuntime) SendTask(_ context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
@@ -205,14 +205,14 @@ func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*
 
 	bindings := []toolcatalog.BindingSpec{
 		{Name: "coder_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
-			result, err := r.dispatchSubTask(toolCtx, biz.AgentCoder, input)
+			result, err := r.dispatchSubTask(toolCtx, biz.AgentKindCoder, input)
 			if err != nil {
 				return "", err
 			}
 			return formatTaskResult("CoderAgent", result), nil
 		}},
 		{Name: "reviewer_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
-			result, err := r.dispatchSubTask(toolCtx, biz.AgentReviewer, input)
+			result, err := r.dispatchSubTask(toolCtx, biz.AgentKindReviewer, input)
 			if err != nil {
 				return "", err
 			}
@@ -266,14 +266,14 @@ func (r *langChainAgentRuntime) runCoder(ctx context.Context, prompt string) (*t
 
 	bindings := []toolcatalog.BindingSpec{
 		{Name: "router_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
-			result, err := r.dispatchSubTask(toolCtx, biz.AgentRouter, input)
+			result, err := r.dispatchSubTask(toolCtx, biz.AgentKindRouter, input)
 			if err != nil {
 				return "", err
 			}
 			return formatTaskResult("RouterAgent", result), nil
 		}},
 		{Name: "reviewer_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
-			result, err := r.dispatchSubTask(toolCtx, biz.AgentReviewer, input)
+			result, err := r.dispatchSubTask(toolCtx, biz.AgentKindReviewer, input)
 			if err != nil {
 				return "", err
 			}
@@ -298,12 +298,12 @@ func (r *langChainAgentRuntime) runCoder(ctx context.Context, prompt string) (*t
 	return r.runToolCallingLoop(ctx, modelClient, toolset, systemPrompt, prompt, "coder agent 已通过本地 tool calling 完成生成")
 }
 
-func normalizeRuntimeAgent(agent biz.Agent) biz.Agent {
-	switch biz.Agent(strings.TrimSpace(strings.ToLower(string(agent)))) {
-	case "", biz.AgentDefault, biz.AgentGeneric:
-		return biz.AgentDefault
+func normalizeRuntimeAgent(agent biz.AgentKind) biz.AgentKind {
+	switch biz.AgentKind(strings.TrimSpace(strings.ToLower(string(agent)))) {
+	case "", biz.AgentKindDefault, biz.AgentKindGeneric:
+		return biz.AgentKindDefault
 	default:
-		return biz.Agent(strings.TrimSpace(strings.ToLower(string(agent))))
+		return biz.AgentKind(strings.TrimSpace(strings.ToLower(string(agent))))
 	}
 }
 
@@ -968,7 +968,7 @@ func (r *langChainAgentRuntime) runPlainLLMTask(ctx context.Context, systemPromp
 	}, nil
 }
 
-func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.Agent, prompt string) (*taskv1.TaskResult, error) {
+func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	cmd := &taskv1.TaskCommand{
 		Agent:  string(agent),
 		Prompt: strings.TrimSpace(prompt),
@@ -983,7 +983,7 @@ func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.A
 			r.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:          time.Now(),
 				TaskID:        agentctx.TaskID(ctx),
-				Agent:         string(biz.AgentRouter),
+				Agent:         string(biz.AgentKindRouter),
 				Stage:         "delegate_remote",
 				Mode:          string(agent),
 				Target:        remote.GetTarget(),
@@ -997,7 +997,7 @@ func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.A
 		r.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:          time.Now(),
 			TaskID:        agentctx.TaskID(ctx),
-			Agent:         string(biz.AgentRouter),
+			Agent:         string(biz.AgentKindRouter),
 			Stage:         "delegate_local",
 			Mode:          string(agent),
 			PromptPreview: common.PreviewPrompt(prompt),
@@ -1006,7 +1006,7 @@ func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.A
 	return r.ReceiveTask(ctx, cmd)
 }
 
-func (r *langChainAgentRuntime) lookupRemoteAgent(agent biz.Agent) *conf.Runtime_RemoteAgent {
+func (r *langChainAgentRuntime) lookupRemoteAgent(agent biz.AgentKind) *conf.Runtime_RemoteAgent {
 	if r == nil || r.runtimeConfig == nil {
 		return nil
 	}
@@ -1057,7 +1057,7 @@ func (r *langChainAgentRuntime) executeRemoteTask(ctx context.Context, remote *c
 			r.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:   time.Now(),
 				TaskID: agentctx.TaskID(ctx),
-				Agent:  string(biz.AgentRouter),
+				Agent:  string(biz.AgentKindRouter),
 				Stage:  "remote_execute_failed",
 				Target: target,
 				Error:  err.Error(),
@@ -1070,7 +1070,7 @@ func (r *langChainAgentRuntime) executeRemoteTask(ctx context.Context, remote *c
 		r.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:       time.Now(),
 			TaskID:     agentctx.TaskID(ctx),
-			Agent:      string(biz.AgentRouter),
+			Agent:      string(biz.AgentKindRouter),
 			Stage:      "remote_execute_done",
 			Target:     target,
 			Mode:       cmd.GetAgent(),
@@ -1097,7 +1097,7 @@ func formatTaskResult(agentName string, result *taskv1.TaskResult) string {
 	return strings.Join(parts, "\n")
 }
 
-func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID string, agent biz.Agent, prompt string) (*taskv1.TaskResult, error) {
+func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID string, agent biz.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		prompt = "请验证 router -> " + string(agent) + " 的委派链路"
@@ -1106,16 +1106,16 @@ func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID str
 		taskID = fmt.Sprintf("verify-%d", time.Now().UnixNano())
 	}
 	if r.memory != nil {
-		if err := r.memory.StartConversation(ctx, taskID, biz.AgentRouter, prompt); err != nil {
+		if err := r.memory.StartConversation(ctx, taskID, biz.AgentKindRouter, prompt); err != nil {
 			return nil, fmt.Errorf("start conversation memory: %w", err)
 		}
 	}
 	if r.trace != nil {
-		r.trace.StartTask(taskID, biz.AgentRouter, "running")
+		r.trace.StartTask(taskID, biz.AgentKindRouter, "running")
 		r.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:          time.Now(),
 			TaskID:        taskID,
-			Agent:         string(biz.AgentRouter),
+			Agent:         string(biz.AgentKindRouter),
 			Stage:         "verification_start",
 			Mode:          string(agent),
 			PromptPreview: common.PreviewPrompt(prompt),
@@ -1127,7 +1127,7 @@ func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID str
 			r.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:   time.Now(),
 				TaskID: taskID,
-				Agent:  string(biz.AgentRouter),
+				Agent:  string(biz.AgentKindRouter),
 				Stage:  "verification_failed",
 				Mode:   string(agent),
 				Error:  err.Error(),
@@ -1137,7 +1137,7 @@ func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID str
 			r.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:       time.Now(),
 				TaskID:     taskID,
-				Agent:      string(biz.AgentRouter),
+				Agent:      string(biz.AgentKindRouter),
 				Stage:      "verification_done",
 				Mode:       string(agent),
 				Summary:    result.GetSummary(),

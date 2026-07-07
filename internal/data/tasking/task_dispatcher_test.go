@@ -9,7 +9,7 @@ import (
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
-	dataagent "kratos-demo/internal/data/agent"
+	dataagent "kratos-demo/internal/data/agent_runtime"
 	datatrace "kratos-demo/internal/data/trace"
 	actorpkg "kratos-demo/third_party/actor"
 
@@ -29,7 +29,7 @@ func TestTaskDispatcherDispatchViaActor(t *testing.T) {
 
 	task := &Task{
 		ID:        "task-dispatch",
-		Agent:     biz.AgentReviewer,
+		Agent:     biz.AgentKindReviewer,
 		Prompt:    "review boundary conditions",
 		Status:    TaskStatusPending,
 		CreatedAt: time.Now(),
@@ -80,7 +80,7 @@ func TestTaskFlowWritesResultAndTrace(t *testing.T) {
 
 	task := &Task{
 		ID:        "task-flow",
-		Agent:     biz.AgentDefault,
+		Agent:     biz.AgentKindDefault,
 		Prompt:    "read README.md and summarize phase-one goals",
 		Status:    TaskStatusPending,
 		CreatedAt: time.Now(),
@@ -131,7 +131,7 @@ func TestTaskFlowWritesResultAndTrace(t *testing.T) {
 func TestDispatchUsesTaskCommand(t *testing.T) {
 	task := &Task{
 		ID:     "task-cmd",
-		Agent:  biz.AgentDefault,
+		Agent:  biz.AgentKindDefault,
 		Prompt: "hello",
 	}
 	cmd := taskToCommand(task)

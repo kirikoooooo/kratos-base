@@ -24,7 +24,7 @@ type AgentMemoryStore interface {
 // It adds business logic and orchestration on top of AgentMemoryStore.
 type AgentMemory interface {
 	UserID() string
-	StartConversation(ctx context.Context, sessionID string, agent bizagent.Agent, initialPrompt string) error
+	StartConversation(ctx context.Context, sessionID string, agent bizagent.AgentKind, initialPrompt string) error
 	LoadConversation(ctx context.Context, sessionID string) (*SessionConversation, error)
 	SaveConversation(ctx context.Context, conv *SessionConversation) error
 	ConversationContextStats(ctx context.Context, sessionID string, turns []bizconversation.ConversationTurn) bizconversation.CompressStats
@@ -32,7 +32,7 @@ type AgentMemory interface {
 	PrepareTurnsForLLMWithMeta(ctx context.Context, sessionID string, turns []bizconversation.ConversationTurn) ([]bizconversation.ConversationTurn, bizconversation.PrepareMeta)
 	ConversationContextUsage(ctx context.Context, sessionID string, turns []bizconversation.ConversationTurn) bizconversation.UsageSnapshot
 	ConversationPreview(ctx context.Context, sessionID string) string
-	PrepareForTask(ctx context.Context, sessionID string, agent bizagent.Agent) error
+	PrepareForTask(ctx context.Context, sessionID string, agent bizagent.AgentKind) error
 	RenderPromptContext(ctx context.Context, sessionID string) string
 	RecordSessionError(ctx context.Context, record SessionErrorRecord) error
 	RecordSessionToolUsage(ctx context.Context, sessionID, toolName string) error

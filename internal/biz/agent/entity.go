@@ -1,12 +1,12 @@
 package agent
 
-// Agent identifies a specific agent type/capability.
-type Agent string
+// AgentKind identifies a specific agent role/capability (e.g. coder, reviewer).
+type AgentKind string
 
 const (
-	AgentDefault  Agent = "default"
-	AgentGeneric  Agent = "generic"
-	AgentRouter   Agent = "router"
-	AgentCoder    Agent = "coder"
-	AgentReviewer Agent = "reviewer"
+	AgentKindDefault  AgentKind = "default"
+	AgentKindGeneric  AgentKind = "generic"
+	AgentKindRouter   AgentKind = "router"
+	AgentKindCoder    AgentKind = "coder"
+	AgentKindReviewer AgentKind = "reviewer"
 )

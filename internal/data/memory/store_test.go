@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	agentcontext "kratos-demo/internal/data/agent/context"
+	agentcontext "kratos-demo/internal/data/agent_runtime/context"
 )
 
 func TestFileAgentMemoryStoreRoundTrip(t *testing.T) {

@@ -1,7 +1,7 @@
 package service
 
 import (
-	agentctx "kratos-demo/internal/data/agent/ctx"
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 )
 
 // PermissionMode controls how risky tool operations are approved in CLI.

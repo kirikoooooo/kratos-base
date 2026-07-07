@@ -1,6 +1,6 @@
 package tool
 import (
-	agentfile "kratos-demo/internal/data/agent/file"
+	agentfile "kratos-demo/internal/data/agent_runtime/file"
 	"kratos-demo/internal/data/common"
 	"context"
 	"encoding/json"
@@ -18,7 +18,7 @@ import (
 	biztool "kratos-demo/internal/biz/tool"
 	datasession "kratos-demo/internal/data/session"
 	datatrace "kratos-demo/internal/data/trace"
-	agentctx "kratos-demo/internal/data/agent/ctx"
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 )
 
 type Runtime struct {

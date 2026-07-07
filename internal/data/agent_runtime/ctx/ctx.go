@@ -22,17 +22,17 @@ func TaskID(ctx context.Context) string {
 	return taskID
 }
 
-func WithAgent(ctx context.Context, agent biz.Agent) context.Context {
+func WithAgent(ctx context.Context, agent biz.AgentKind) context.Context {
 	return context.WithValue(ctx, agentContextKey{}, agent)
 }
 
-func Agent(ctx context.Context) biz.Agent {
+func Agent(ctx context.Context) biz.AgentKind {
 	if ctx == nil {
-		return biz.AgentDefault
+		return biz.AgentKindDefault
 	}
-	agent, _ := ctx.Value(agentContextKey{}).(biz.Agent)
+	agent, _ := ctx.Value(agentContextKey{}).(biz.AgentKind)
 	if strings.TrimSpace(string(agent)) == "" {
-		return biz.AgentDefault
+		return biz.AgentKindDefault
 	}
 	return agent
 }

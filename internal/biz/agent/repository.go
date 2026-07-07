@@ -18,8 +18,8 @@ var (
 type AgentRuntime interface {
 	actorpkg.Actor
 	Name() string
-	Supports(Agent) bool
-	Execute(context.Context, Agent, string) (*taskv1.TaskResult, error)
+	Supports(AgentKind) bool
+	Execute(context.Context, AgentKind, string) (*taskv1.TaskResult, error)
 	ReceiveTask(context.Context, *taskv1.TaskCommand) (*taskv1.TaskResult, error)
 	SendTask(context.Context, *taskv1.TaskCommand) (*taskv1.TaskResult, error)
 }
@@ -27,5 +27,5 @@ type AgentRuntime interface {
 // DelegationVerifier is an optional capability for runtimes that support
 // delegation verification.
 type DelegationVerifier interface {
-	VerifyDelegation(context.Context, string, Agent, string) (*taskv1.TaskResult, error)
+	VerifyDelegation(context.Context, string, AgentKind, string) (*taskv1.TaskResult, error)
 }

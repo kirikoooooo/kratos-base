@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"kratos-demo/internal/conf"
-	dataagent "kratos-demo/internal/data/agent"
+	dataagent "kratos-demo/internal/data/agent_runtime"
 	datasession "kratos-demo/internal/data/session"
 	datatasking "kratos-demo/internal/data/tasking"
 	datatrace "kratos-demo/internal/data/trace"

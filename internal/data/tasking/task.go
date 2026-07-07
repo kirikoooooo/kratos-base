@@ -26,7 +26,7 @@ const (
 
 type Task struct {
 	ID        string             `json:"task_id"`
-	Agent     biz.Agent          `json:"agent"`
+	Agent     biz.AgentKind          `json:"agent"`
 	Prompt    string             `json:"prompt"`
 	Status    TaskStatus         `json:"status"`
 	Result    *taskv1.TaskResult `json:"result,omitempty"`

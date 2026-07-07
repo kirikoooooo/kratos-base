@@ -27,7 +27,7 @@ func NewDelegationTraceStore() DelegationTraceStore {
 	}
 }
 
-func (s *memoryTraceStore) StartTask(taskID string, agent biz.Agent, status string) {
+func (s *memoryTraceStore) StartTask(taskID string, agent biz.AgentKind, status string) {
 	if strings.TrimSpace(taskID) == "" {
 		return
 	}

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	agentctx "kratos-demo/internal/data/agent/ctx"
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 )
 
 func (c *CLIService) riskApprover(ctx context.Context, action agentctx.RiskAction) (bool, error) {

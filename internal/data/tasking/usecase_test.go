@@ -45,16 +45,16 @@ func TestNormalizeAgent(t *testing.T) {
 	tests := []struct {
 		name  string
 		input string
-		want  biz.Agent
+		want  biz.AgentKind
 	}{
-		{name: "blank defaults to default profile", input: "", want: biz.AgentDefault},
-		{name: "whitespace defaults to default profile", input: "   ", want: biz.AgentDefault},
-		{name: "default stays default", input: "default", want: biz.AgentDefault},
-		{name: "generic aliases to default profile", input: "generic", want: biz.AgentDefault},
-		{name: "router remains compatible", input: "RoUtEr", want: biz.AgentRouter},
-		{name: "coder remains compatible", input: " coder ", want: biz.AgentCoder},
-		{name: "reviewer remains compatible", input: "reviewer", want: biz.AgentReviewer},
-		{name: "unknown value preserved", input: "planner", want: biz.Agent("planner")},
+		{name: "blank defaults to default profile", input: "", want: biz.AgentKindDefault},
+		{name: "whitespace defaults to default profile", input: "   ", want: biz.AgentKindDefault},
+		{name: "default stays default", input: "default", want: biz.AgentKindDefault},
+		{name: "generic aliases to default profile", input: "generic", want: biz.AgentKindDefault},
+		{name: "router remains compatible", input: "RoUtEr", want: biz.AgentKindRouter},
+		{name: "coder remains compatible", input: " coder ", want: biz.AgentKindCoder},
+		{name: "reviewer remains compatible", input: "reviewer", want: biz.AgentKindReviewer},
+		{name: "unknown value preserved", input: "planner", want: biz.AgentKind("planner")},
 	}
 
 	for _, tt := range tests {
@@ -76,14 +76,14 @@ func TestTaskUsecaseCreateUsesDefaultAgentProfile(t *testing.T) {
 		t.Fatalf("Create() error = %v", err)
 	}
 
-	if task.Agent != biz.AgentDefault {
-		t.Fatalf("created task agent = %q, want %q", task.Agent, biz.AgentDefault)
+	if task.Agent != biz.AgentKindDefault {
+		t.Fatalf("created task agent = %q, want %q", task.Agent, biz.AgentKindDefault)
 	}
-	if repo.saved == nil || repo.saved.Agent != biz.AgentDefault {
-		t.Fatalf("saved task agent = %v, want %q", repo.saved, biz.AgentDefault)
+	if repo.saved == nil || repo.saved.Agent != biz.AgentKindDefault {
+		t.Fatalf("saved task agent = %v, want %q", repo.saved, biz.AgentKindDefault)
 	}
-	if dispatcher.last == nil || dispatcher.last.Agent != biz.AgentDefault {
-		t.Fatalf("dispatched agent = %v, want %q", dispatcher.last, biz.AgentDefault)
+	if dispatcher.last == nil || dispatcher.last.Agent != biz.AgentKindDefault {
+		t.Fatalf("dispatched agent = %v, want %q", dispatcher.last, biz.AgentKindDefault)
 	}
 }
 
