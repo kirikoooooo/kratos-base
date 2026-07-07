@@ -873,9 +873,27 @@ func (r *langChainAgentRuntime) publishContextUsage(ctx context.Context, session
 		return
 	}
 	usage := agentcontext.NewUsageSnapshot(meta.Stats)
-	r.trace.UpdateContextUsage(sessionID, usage, meta.Compress)
+	var traceCompress *datatrace.ContextCompressResult
+	if meta.Compress != nil {
+		c := datatrace.ContextCompressResult{
+			OriginalChars:   meta.Compress.OriginalChars,
+			CompressedChars: meta.Compress.CompressedChars,
+			Compressed:      meta.Compress.Compressed,
+			OmittedTurns:    meta.Compress.OmittedTurns,
+			TruncatedTools:  meta.Compress.TruncatedTools,
+		}
+		traceCompress = &c
+	}
+	r.trace.UpdateContextUsage(sessionID, usage, traceCompress)
 	if meta.Compress == nil || !meta.Compress.Compressed {
 		return
+	}
+	compressTrace := datatrace.ContextCompressResult{
+		OriginalChars:   meta.Compress.OriginalChars,
+		CompressedChars: meta.Compress.CompressedChars,
+		Compressed:      meta.Compress.Compressed,
+		OmittedTurns:    meta.Compress.OmittedTurns,
+		TruncatedTools:  meta.Compress.TruncatedTools,
 	}
 	agent := string(agentctx.Agent(ctx))
 	if agent == "" {
@@ -886,8 +904,8 @@ func (r *langChainAgentRuntime) publishContextUsage(ctx context.Context, session
 		TaskID:     sessionID,
 		Agent:      agent,
 		Stage:      "context_compress",
-		Summary:    agentcontext.FormatCompressEventSummary(*meta.Compress),
-		ToolOutput: agentcontext.FormatCompressEventOutput(*meta.Compress, meta.Stats.Threshold),
+		Summary:    agentcontext.FormatCompressEventSummary(compressTrace),
+		ToolOutput: agentcontext.FormatCompressEventOutput(compressTrace, meta.Stats.Threshold),
 	})
 }
 

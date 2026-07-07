@@ -25,7 +25,7 @@ type fileAgentMemoryStore struct {
 	log     *log.Helper
 }
 
-func NewAgentMemoryStore(dataConf *conf.Data, logger log.Logger) (AgentMemoryStore, error) {
+func NewFileAgentMemoryStore(dataConf *conf.Data, logger log.Logger) (AgentMemoryStore, error) {
 	workspace, err := os.Getwd()
 	if err != nil {
 		return nil, fmt.Errorf("resolve workspace root: %w", err)
@@ -56,7 +56,7 @@ func NewAgentMemoryStore(dataConf *conf.Data, logger log.Logger) (AgentMemorySto
 	return store, nil
 }
 
-func NewAgentMemoryConfig(dataConf *conf.Data) AgentMemoryConfig {
+func NewFileAgentMemoryConfig(dataConf *conf.Data) AgentMemoryConfig {
 	dir := common.DefaultMemoryDir
 	userID := common.DefaultMemoryUserID
 	threshold := 0

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"kratos-demo/internal/biz"
+	bizconversation "kratos-demo/internal/biz/conversation"
 	agentcontext "kratos-demo/internal/data/agent/context"
 	datatrace "kratos-demo/internal/data/trace"
 )
@@ -17,7 +18,7 @@ type agentMemoryUsecase struct {
 	config AgentMemoryConfig
 }
 
-func NewAgentMemoryUsecase(store AgentMemoryStore, config AgentMemoryConfig) AgentMemory {
+func NewFileAgentMemoryUsecase(store AgentMemoryStore, config AgentMemoryConfig) AgentMemory {
 	return &agentMemoryUsecase{
 		store:  store,
 		config: config,
@@ -119,22 +120,24 @@ func (uc *agentMemoryUsecase) PrepareTurnsForLLMWithMeta(ctx context.Context, se
 		return turns, meta
 	}
 	compressed, compressResult := agentcontext.CompressConversationTurns(turns, cfg)
-	meta.Compress = &compressResult
+	convResult := traceToConversationCompressResult(compressResult)
+	meta.Compress = &convResult
 	return compressed, meta
 }
 
-func (uc *agentMemoryUsecase) ConversationContextUsage(ctx context.Context, sessionID string, turns []agentcontext.ConversationTurn) datatrace.ContextUsageSnapshot {
+func (uc *agentMemoryUsecase) ConversationContextUsage(ctx context.Context, sessionID string, turns []agentcontext.ConversationTurn) bizconversation.UsageSnapshot {
 	if uc == nil {
-		return datatrace.ContextUsageSnapshot{}
+		return bizconversation.UsageSnapshot{}
 	}
 	if len(turns) == 0 {
 		conv, err := uc.LoadConversation(ctx, sessionID)
 		if err != nil || conv == nil {
-			return datatrace.ContextUsageSnapshot{}
+			return bizconversation.UsageSnapshot{}
 		}
 		turns = conv.Turns
 	}
-	return agentcontext.NewUsageSnapshot(uc.ConversationContextStats(ctx, sessionID, turns))
+	snap := agentcontext.NewUsageSnapshot(uc.ConversationContextStats(ctx, sessionID, turns))
+		return traceToConversationUsageSnapshot(snap)
 }
 
 func (uc *agentMemoryUsecase) ConversationPreview(ctx context.Context, sessionID string) string {
@@ -286,4 +289,32 @@ func compressConfig(config AgentMemoryConfig) agentcontext.CompressConfig {
 		config.KeepRecentTurns,
 		config.ToolOutputMaxChars,
 	)
+}
+
+// traceToConversationCompressResult converts a datatrace.ContextCompressResult
+// to its biz/conversation equivalent.
+func traceToConversationCompressResult(r datatrace.ContextCompressResult) bizconversation.CompressResult {
+	return bizconversation.CompressResult{
+		OriginalChars:   r.OriginalChars,
+		CompressedChars: r.CompressedChars,
+		Compressed:      r.Compressed,
+		OmittedTurns:    r.OmittedTurns,
+		TruncatedTools:  r.TruncatedTools,
+	}
+}
+
+// traceToConversationUsageSnapshot converts a datatrace.ContextUsageSnapshot
+// to its biz/conversation equivalent.
+func traceToConversationUsageSnapshot(s datatrace.ContextUsageSnapshot) bizconversation.UsageSnapshot {
+	return bizconversation.UsageSnapshot{
+		EstimatedChars:      s.EstimatedChars,
+		Threshold:           s.Threshold,
+		UsagePercent:        s.UsagePercent,
+		NeedsCompress:       s.NeedsCompress,
+		CompressCount:       s.CompressCount,
+		LastOriginalChars:   s.LastOriginalChars,
+		LastCompressedChars: s.LastCompressedChars,
+		LastOmittedTurns:    s.LastOmittedTurns,
+		LastTruncatedTools:  s.LastTruncatedTools,
+	}
 }

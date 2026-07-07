@@ -10,8 +10,9 @@ import (
 	"kratos-demo/internal/data/common"
 )
 
-// BootstrapUserMemoryIfEmpty ?????????? skills/?????
-func BootstrapUserMemoryIfEmpty(ctx context.Context, store AgentMemoryStore, userID, workspace string) error {
+// BootstrapFileUserMemoryIfEmpty discovers tool hints, skill hints, and default policies
+// and seeds them into user memory if it hasn't been bootstrapped yet.
+func BootstrapFileUserMemoryIfEmpty(ctx context.Context, store AgentMemoryStore, userID, workspace string) error {
 	if store == nil {
 		return nil
 	}

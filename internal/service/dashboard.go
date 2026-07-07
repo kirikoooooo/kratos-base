@@ -283,7 +283,18 @@ func (s *DashboardService) enrichSessions(sessions []datatrace.DelegationSession
 		if s.memory != nil {
 			sessions[i].ConversationPreview = s.memory.ConversationPreview(ctx, sessions[i].TaskID)
 			liveUsage := s.memory.ConversationContextUsage(ctx, sessions[i].TaskID, nil)
-			sessions[i].ContextUsage = mergeContextUsage(sessions[i].ContextUsage, liveUsage)
+				liveTrace := datatrace.ContextUsageSnapshot{
+					EstimatedChars:      liveUsage.EstimatedChars,
+					Threshold:           liveUsage.Threshold,
+					UsagePercent:        liveUsage.UsagePercent,
+					NeedsCompress:       liveUsage.NeedsCompress,
+					CompressCount:       liveUsage.CompressCount,
+					LastOriginalChars:   liveUsage.LastOriginalChars,
+					LastCompressedChars: liveUsage.LastCompressedChars,
+					LastOmittedTurns:    liveUsage.LastOmittedTurns,
+					LastTruncatedTools:  liveUsage.LastTruncatedTools,
+				}
+				sessions[i].ContextUsage = mergeContextUsage(sessions[i].ContextUsage, liveTrace)
 		}
 		if s.sessionStore != nil {
 			if sess := s.sessionStore.Open(sessions[i].TaskID); sess != nil {
