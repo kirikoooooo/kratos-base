@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	bizprovider "kratos-demo/internal/biz/provider"
 	"kratos-demo/internal/conf"
 
 	"github.com/go-kratos/kratos/v2/log"
@@ -50,12 +51,12 @@ func newOpenAIProvider(aiConf *conf.AI, logger *log.Helper) (*OpenAIProvider, er
 // CreateModel 创建 OpenAI 兼容的 LLM 实例。
 // 当启用 function calling 时，gpt-5* 前缀的模型会被归一化为 gpt-4o-mini。
 func (p *OpenAIProvider) CreateModel(opts ...ModelOption) (llms.Model, error) {
-	mc := &modelConfig{}
+	mc := bizprovider.NewModelConfig()
 	for _, opt := range opts {
 		opt(mc)
 	}
 	model := p.config.Model
-	if mc.functionCalling {
+	if bizprovider.ModelConfigFunctionCalling(mc) {
 		model = normalizeForFunctionCalling(model)
 	}
 	return p.create(model)

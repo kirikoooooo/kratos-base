@@ -8,41 +8,20 @@ import (
 	"strings"
 	"time"
 
+	bizprovider "kratos-demo/internal/biz/provider"
 	"kratos-demo/internal/conf"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/tmc/langchaingo/llms"
 )
 
-// Config 封装创建 provider 所需的通用配置。
-type Config struct {
-	APIKey  string
-	BaseURL string
-	Model   string
-	Timeout time.Duration
-}
+// Re-export from biz/provider for backward compatibility.
+type (
+	Config      = bizprovider.Config
+	LLMProvider = bizprovider.LLMProvider
+	ModelOption = bizprovider.ModelOption
+)
 
-// LLMProvider 抽象不同 AI 厂商的模型创建逻辑。
-type LLMProvider interface {
-	// CreateModel 创建一个 LLM 实例。
-	// opts 支持 WithFunctionCalling 等语义化选项。
-	CreateModel(opts ...ModelOption) (llms.Model, error)
-}
-
-type modelConfig struct {
-	functionCalling bool
-}
-
-// ModelOption 模型创建选项。
-type ModelOption func(*modelConfig)
-
-// WithFunctionCalling 标记该模型用于 function calling 场景。
-// 部分 provider 会据此做模型名归一化（如 OpenAI 将 gpt-5* 降级为 gpt-4o-mini）。
-func WithFunctionCalling() ModelOption {
-	return func(c *modelConfig) {
-		c.functionCalling = true
-	}
-}
+var WithFunctionCalling = bizprovider.WithFunctionCalling
 
 const (
 	defaultTimeout = 120 * time.Second

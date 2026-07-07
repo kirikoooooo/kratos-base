@@ -15,6 +15,7 @@ import (
 	"time"
 
 	toolcatalog "kratos-demo/third_party/tools"
+	biztool "kratos-demo/internal/biz/tool"
 	datasession "kratos-demo/internal/data/session"
 	datatrace "kratos-demo/internal/data/trace"
 	agentctx "kratos-demo/internal/data/agent/ctx"
@@ -643,4 +644,26 @@ func summarizeToolOutput(output string) string {
 		lines = lines[:3]
 	}
 	return strings.Join(lines, "\n")
+}
+
+// toolRepositoryAdapter adapts [Runtime] to satisfy [biztool.ToolRepository].
+type toolRepositoryAdapter struct {
+	runtime *Runtime
+}
+
+func (a *toolRepositoryAdapter) Bindings() []biztool.BindingSpec {
+	specs := a.runtime.Bindings()
+	result := make([]biztool.BindingSpec, len(specs))
+	for i, s := range specs {
+		result[i] = biztool.BindingSpec{
+			Name:    s.Name,
+			Handler: biztool.Handler(s.Handler),
+		}
+	}
+	return result
+}
+
+// AsToolRepository returns a [biztool.ToolRepository] view of this Runtime.
+func (r *Runtime) AsToolRepository() biztool.ToolRepository {
+	return &toolRepositoryAdapter{runtime: r}
 }

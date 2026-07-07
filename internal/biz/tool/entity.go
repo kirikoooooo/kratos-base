@@ -2,10 +2,13 @@ package tool
 
 import "context"
 
-// ToolBinding maps a tool name to its handler.
-type ToolBinding struct {
+// Handler is a tool execution function.
+type Handler func(ctx context.Context, input string) (string, error)
+
+// BindingSpec maps a tool name to its handler.
+type BindingSpec struct {
 	Name    string
-	Handler func(ctx context.Context, input string) (string, error)
+	Handler Handler
 }
 
 // ToolResult captures the outcome of a tool invocation.
