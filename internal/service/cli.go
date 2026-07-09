@@ -40,6 +40,10 @@ type CLIService struct {
 	permMode PermissionMode
 	permMu   sync.Mutex
 
+	// planShown tracks whether a plan_presented event was already displayed
+	// during the current turn, to suppress duplicate rendering in printResult.
+	planShown bool
+
 	aiConfig *conf.AI
 }
 
@@ -146,6 +150,7 @@ func (c *CLIService) processLogPath() string {
 }
 
 func (c *CLIService) processTurn(ctx context.Context, prompt string) {
+	c.planShown = false
 	c.ui.printUserTurn(prompt)
 	if c.processLog != nil {
 		c.processLog.LogTurnStart(c.sessionID, prompt)
@@ -308,6 +313,7 @@ func (c *CLIService) displayEvent(event datatrace.DelegationEvent) {
 	}
 	switch strings.TrimSpace(event.Stage) {
 	case "plan_presented":
+		c.planShown = true
 		c.ui.printPlanPresented(event)
 		return
 	}
@@ -407,7 +413,16 @@ func (c *CLIService) printResult(result interface {
 	GetOutput() string
 }) {
 	if result == nil {
-		c.ui.printAssistant("router", "", "(no response)")
+		if !c.planShown {
+			c.ui.printAssistant("router", "", "(no response)")
+		}
+		return
+	}
+	// When a plan was already displayed via plan_presented events, the same
+	// content would appear twice if we printAssistant again.  Skip the
+	// assistant header and only show a compact line when the plan was shown.
+	if c.planShown {
+		c.planShown = false
 		return
 	}
 	c.ui.printAssistant("router", result.GetSummary(), result.GetOutput())
