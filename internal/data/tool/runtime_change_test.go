@@ -1,4 +1,5 @@
 package tool
+
 import (
 	"context"
 	"encoding/json"
@@ -6,9 +7,9 @@ import (
 	"path/filepath"
 	"testing"
 
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 	datasession "kratos-demo/internal/data/session"
 	datatrace "kratos-demo/internal/data/trace"
-	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 )
 
 func TestEditFileRecordsSessionChange(t *testing.T) {
@@ -30,10 +31,10 @@ func TestEditFileRecordsSessionChange(t *testing.T) {
 	ctx := agentctx.WithTaskID(context.Background(), taskID)
 
 	input, _ := json.Marshal(map[string]any{
-		"path":        path,
-		"operation":   "search_replace",
-		"old_string":  "beta",
-		"new_string":  "beta-updated",
+		"path":       path,
+		"operation":  "search_replace",
+		"old_string": "beta",
+		"new_string": "beta-updated",
 	})
 	_, err = tools.editFile(ctx, string(input))
 	if err != nil {

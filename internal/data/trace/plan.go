@@ -1,9 +1,5 @@
 package trace
 
-import (
-)
-
-
 func advancePlan(steps []PlanStep, event DelegationEvent) []PlanStep {
 	next := clonePlanSteps(steps)
 	switch event.Stage {

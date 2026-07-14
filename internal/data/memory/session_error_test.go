@@ -1,9 +1,9 @@
 package memory
+
 import (
 	"strings"
 	"testing"
 	"time"
-
 )
 
 func TestFormatSessionErrorsForPrompt(t *testing.T) {

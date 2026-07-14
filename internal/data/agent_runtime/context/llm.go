@@ -1,8 +1,8 @@
 package context
+
 import (
 	"fmt"
 	"strings"
-
 
 	"github.com/tmc/langchaingo/llms"
 )

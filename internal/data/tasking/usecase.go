@@ -7,7 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"kratos-demo/internal/biz"
+	"kratos-demo/internal/consts/public"
 )
 
 type TaskUsecase struct {
@@ -67,14 +67,14 @@ func (uc *TaskUsecase) Get(ctx context.Context, id string) (*Task, error) {
 	return uc.repo.Get(ctx, id)
 }
 
-func NormalizeAgent(agent string) biz.AgentKind {
+func NormalizeAgent(agent string) public.AgentKind {
 	agent = strings.TrimSpace(strings.ToLower(agent))
 	if agent == "" {
-		return biz.AgentKindDefault
+		return public.AgentKindDefault
 	}
-	switch biz.AgentKind(agent) {
-	case biz.AgentKindDefault, biz.AgentKindGeneric:
-		return biz.AgentKindDefault
+	switch public.AgentKind(agent) {
+	case public.AgentKindDefault, public.AgentKindGeneric:
+		return public.AgentKindDefault
 	}
-	return biz.AgentKind(agent)
+	return public.AgentKind(agent)
 }

@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"kratos-demo/internal/conf"
+	"kratos-demo/internal/consts/public"
 	"kratos-demo/internal/data/common"
 )
 
@@ -36,7 +37,7 @@ type sessionFileState struct {
 }
 
 func NewSessionStore(dataConf *conf.Data) SessionStore {
-	dir := filepath.Join(common.DefaultMemoryDir, "changes")
+	dir := filepath.Join(public.DefaultMemoryDir, "changes")
 	if dataConf != nil && dataConf.GetAgentMemory() != nil {
 		if configured := strings.TrimSpace(dataConf.GetAgentMemory().GetDir()); configured != "" {
 			dir = filepath.Join(configured, "changes")

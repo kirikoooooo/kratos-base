@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"kratos-demo/internal/biz"
 	bizconversation "kratos-demo/internal/biz/conversation"
+	"kratos-demo/internal/consts/public"
 	agentcontext "kratos-demo/internal/data/agent_runtime/context"
 	datatrace "kratos-demo/internal/data/trace"
 )
@@ -32,7 +32,7 @@ func (uc *agentMemoryUsecase) UserID() string {
 	return normalizeMemoryUserID(uc.config.UserID)
 }
 
-func (uc *agentMemoryUsecase) StartConversation(ctx context.Context, sessionID string, agent biz.AgentKind, initialPrompt string) error {
+func (uc *agentMemoryUsecase) StartConversation(ctx context.Context, sessionID string, agent public.AgentKind, initialPrompt string) error {
 	if uc == nil || uc.store == nil {
 		return nil
 	}
@@ -137,7 +137,7 @@ func (uc *agentMemoryUsecase) ConversationContextUsage(ctx context.Context, sess
 		turns = conv.Turns
 	}
 	snap := agentcontext.NewUsageSnapshot(uc.ConversationContextStats(ctx, sessionID, turns))
-		return traceToConversationUsageSnapshot(snap)
+	return traceToConversationUsageSnapshot(snap)
 }
 
 func (uc *agentMemoryUsecase) ConversationPreview(ctx context.Context, sessionID string) string {
@@ -162,7 +162,7 @@ func (uc *agentMemoryUsecase) ConversationPreview(ctx context.Context, sessionID
 	return ""
 }
 
-func (uc *agentMemoryUsecase) PrepareForTask(ctx context.Context, sessionID string, agent biz.AgentKind) error {
+func (uc *agentMemoryUsecase) PrepareForTask(ctx context.Context, sessionID string, agent public.AgentKind) error {
 	if uc == nil || uc.store == nil {
 		return nil
 	}

@@ -16,10 +16,11 @@ import (
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
-	datatasking "kratos-demo/internal/data/tasking"
+	"kratos-demo/internal/consts/public"
 	dataagent "kratos-demo/internal/data/agent_runtime"
-	datatrace "kratos-demo/internal/data/trace"
 	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
+	datatasking "kratos-demo/internal/data/tasking"
+	datatrace "kratos-demo/internal/data/trace"
 
 	"github.com/go-kratos/kratos/v2/log"
 )
@@ -172,7 +173,7 @@ func (c *CLIService) processTurn(ctx context.Context, prompt string) {
 	done := make(chan struct{})
 	go func() {
 		defer close(done)
-		result, runErr = c.dash.runConversation(turnCtx, c.sessionID, biz.AgentRouter, prompt)
+		result, runErr = c.dash.runConversation(turnCtx, c.sessionID, public.AgentKindRouter, prompt)
 	}()
 
 	stopWatch := make(chan struct{})

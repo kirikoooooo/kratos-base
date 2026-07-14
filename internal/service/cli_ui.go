@@ -9,19 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"kratos-demo/internal/consts/public"
 	datatrace "kratos-demo/internal/data/trace"
-)
-
-const (
-	ansiReset   = "\033[0m"
-	ansiDim     = "\033[2m"
-	ansiBold    = "\033[1m"
-	ansiCyan    = "\033[36m"
-	ansiGreen   = "\033[32m"
-	ansiYellow  = "\033[33m"
-	ansiMagenta = "\033[35m"
-	ansiBlue    = "\033[34m"
-	ansiRed     = "\033[31m"
 )
 
 var codeFenceRE = regexp.MustCompile("(?s)```([^\n`]*)\n(.*?)```")
@@ -56,17 +45,17 @@ func (u *cliUI) paint(code, text string) string {
 	if !u.color {
 		return text
 	}
-	return code + text + ansiReset
+	return code + text + public.AnsiReset
 }
 
-func (u *cliUI) dim(text string) string    { return u.paint(ansiDim, text) }
-func (u *cliUI) bold(text string) string  { return u.paint(ansiBold, text) }
-func (u *cliUI) cyan(text string) string  { return u.paint(ansiCyan, text) }
-func (u *cliUI) green(text string) string { return u.paint(ansiGreen, text) }
-func (u *cliUI) yellow(text string) string { return u.paint(ansiYellow, text) }
-func (u *cliUI) magenta(text string) string { return u.paint(ansiMagenta, text) }
-func (u *cliUI) blue(text string) string  { return u.paint(ansiBlue, text) }
-func (u *cliUI) red(text string) string   { return u.paint(ansiRed, text) }
+func (u *cliUI) dim(text string) string     { return u.paint(public.AnsiDim, text) }
+func (u *cliUI) bold(text string) string    { return u.paint(public.AnsiBold, text) }
+func (u *cliUI) cyan(text string) string    { return u.paint(public.AnsiCyan, text) }
+func (u *cliUI) green(text string) string   { return u.paint(public.AnsiGreen, text) }
+func (u *cliUI) yellow(text string) string  { return u.paint(public.AnsiYellow, text) }
+func (u *cliUI) magenta(text string) string { return u.paint(public.AnsiMagenta, text) }
+func (u *cliUI) blue(text string) string    { return u.paint(public.AnsiBlue, text) }
+func (u *cliUI) red(text string) string     { return u.paint(public.AnsiRed, text) }
 
 func (u *cliUI) println(text string) {
 	u.mu.Lock()
@@ -82,8 +71,8 @@ func (u *cliUI) printf(format string, args ...any) {
 
 func (u *cliUI) printBanner(title, subtitle string) {
 	u.println("")
-	u.println(u.bold("  "+title))
-	u.println(u.dim("  "+subtitle))
+	u.println(u.bold("  " + title))
+	u.println(u.dim("  " + subtitle))
 	u.println("")
 }
 
@@ -273,15 +262,15 @@ func formatCLIEventLine(event datatrace.DelegationEvent, color bool) string {
 	}
 	switch {
 	case strings.HasPrefix(body, "↪"):
-		return prefix + "\033[35m" + body + ansiReset
+		return prefix + "\033[35m" + body + public.AnsiReset
 	case strings.HasPrefix(body, "⏺"):
-		return prefix + "\033[33m" + body + ansiReset
+		return prefix + "\033[33m" + body + public.AnsiReset
 	case strings.HasPrefix(body, "✕"):
-		return prefix + "\033[31m" + body + ansiReset
+		return prefix + "\033[31m" + body + public.AnsiReset
 	case strings.HasPrefix(body, "✓"):
-		return prefix + "\033[32m" + body + ansiReset
+		return prefix + "\033[32m" + body + public.AnsiReset
 	default:
-		return prefix + "\033[2m" + body + ansiReset
+		return prefix + "\033[2m" + body + public.AnsiReset
 	}
 }
 
@@ -346,7 +335,7 @@ func writeCLICodeBlock(u *cliUI, indent, lang, code string) {
 		label = "code"
 	}
 	border := strings.Repeat("─", max(24, len(label)+8))
-	u.println(u.dim(indent+"┌─ "+label+" "+border))
+	u.println(u.dim(indent + "┌─ " + label + " " + border))
 	for _, line := range strings.Split(code, "\n") {
 		u.println(u.blue(indent+"│ ") + line)
 	}

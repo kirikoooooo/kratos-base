@@ -1,15 +1,14 @@
 package trace
 
 import (
+	"kratos-demo/internal/consts/public"
 	"testing"
-
-	"kratos-demo/internal/biz"
 )
 
 func TestUpdateContextUsageRecordsCompressCount(t *testing.T) {
 	trace := NewDelegationTraceStore().(*memoryTraceStore)
 	taskID := "ctx-task-1"
-	trace.StartTask(taskID, biz.AgentKindCoder, "running")
+	trace.StartTask(taskID, public.AgentKindCoder, "running")
 
 	usage := newContextUsageSnapshot(210000, 200000, true)
 	compress := &ContextCompressResult{

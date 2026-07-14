@@ -12,10 +12,11 @@ import (
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
+	"kratos-demo/internal/consts/public"
 	"kratos-demo/internal/data"
-	actorpkg "kratos-demo/third_party/actor"
 	datatasking "kratos-demo/internal/data/tasking"
 	datatrace "kratos-demo/internal/data/trace"
+	actorpkg "kratos-demo/third_party/actor"
 )
 
 type dashboardTestMux struct {
@@ -28,7 +29,7 @@ func (m dashboardTestMux) HandleFunc(pattern string, handler http.HandlerFunc) {
 
 func TestDashboardStreamReturnsStateEvent(t *testing.T) {
 	trace := data.NewDelegationTraceStore()
-	trace.StartTask("stream-1", biz.AgentKindDefault, string(datatasking.TaskStatusRunning))
+	trace.StartTask("stream-1", public.AgentKindDefault, string(datatasking.TaskStatusRunning))
 	trace.UpdatePlan("stream-1", []datatrace.PlanStep{{
 		ID:     "understand",
 		Title:  "理解任务",
@@ -36,7 +37,7 @@ func TestDashboardStreamReturnsStateEvent(t *testing.T) {
 	}})
 	trace.AppendEvent(datatrace.DelegationEvent{
 		TaskID:   "stream-1",
-		Agent:    string(biz.AgentKindDefault),
+		Agent:    string(public.AgentKindDefault),
 		Stage:    "task_running",
 		ToolName: "read_file",
 	})
@@ -92,9 +93,9 @@ func TestRunConversationAppendsFinalAnswerEvent(t *testing.T) {
 		},
 	}
 	svc := NewDashboardService(trace, biz.NewAgentRuntimeUsecase(runtime), nil, nil, &conf.Runtime{})
-	svc.markAgentStarted(biz.AgentKindDefault)
+	svc.markAgentStarted(public.AgentKindDefault)
 
-	result, err := svc.runConversation(context.Background(), "session-final", biz.AgentKindDefault, "summarize README")
+	result, err := svc.runConversation(context.Background(), "session-final", public.AgentKindDefault, "summarize README")
 	if err != nil {
 		t.Fatalf("runConversation() error = %v", err)
 	}
@@ -134,15 +135,15 @@ func (f fakeDashboardRuntime) PID() actorpkg.PID           { return actorpkg.New
 func (f fakeDashboardRuntime) Process(_ *actorpkg.Message) {}
 func (f fakeDashboardRuntime) OnStop()                     {}
 func (f fakeDashboardRuntime) Name() string                { return "fake-dashboard-runtime" }
-func (f fakeDashboardRuntime) Supports(agent biz.AgentKind) bool {
+func (f fakeDashboardRuntime) Supports(agent public.AgentKind) bool {
 	switch agent {
-	case biz.AgentKindDefault, biz.AgentKindRouter, biz.AgentKindCoder, biz.AgentKindReviewer:
+	case public.AgentKindDefault, public.AgentKindRouter, public.AgentKindCoder, public.AgentKindReviewer:
 		return true
 	default:
 		return false
 	}
 }
-func (f fakeDashboardRuntime) Execute(_ context.Context, _ biz.AgentKind, _ string) (*taskv1.TaskResult, error) {
+func (f fakeDashboardRuntime) Execute(_ context.Context, _ public.AgentKind, _ string) (*taskv1.TaskResult, error) {
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -155,7 +156,7 @@ func (f fakeDashboardRuntime) ReceiveTask(ctx context.Context, cmd *taskv1.TaskC
 	if cmd == nil {
 		return nil, errors.New("task command is nil")
 	}
-	return f.Execute(ctx, biz.AgentKind(cmd.GetAgent()), cmd.GetPrompt())
+	return f.Execute(ctx, public.AgentKind(cmd.GetAgent()), cmd.GetPrompt())
 }
 func (f fakeDashboardRuntime) SendTask(ctx context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
 	return f.ReceiveTask(ctx, cmd)

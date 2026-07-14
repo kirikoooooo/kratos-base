@@ -8,11 +8,11 @@ import (
 	"time"
 
 	taskv1 "kratos-demo/api/task/v1"
-	"kratos-demo/internal/service"
-	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
-	datatrace "kratos-demo/internal/data/trace"
+	"kratos-demo/internal/consts/public"
 	datatasking "kratos-demo/internal/data/tasking"
+	datatrace "kratos-demo/internal/data/trace"
+	"kratos-demo/internal/service"
 )
 
 type dashboardMux struct{ *http.ServeMux }
@@ -23,11 +23,11 @@ func (m dashboardMux) HandleFunc(pattern string, handler http.HandlerFunc) {
 
 func TestDashboardStateIncludesToolTimeline(t *testing.T) {
 	trace := datatrace.NewDelegationTraceStore()
-	trace.StartTask("session-1", biz.AgentKindDefault, string(datatasking.TaskStatusDone))
+	trace.StartTask("session-1", public.AgentKindDefault, string(datatasking.TaskStatusDone))
 	trace.AppendEvent(datatrace.DelegationEvent{
 		Time:          time.Now(),
 		TaskID:        "session-1",
-		Agent:         string(biz.AgentKindDefault),
+		Agent:         string(public.AgentKindDefault),
 		Stage:         "tool_read_file",
 		PromptPreview: "README.md",
 		Summary:       "path: README.md",

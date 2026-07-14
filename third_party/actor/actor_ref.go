@@ -5,6 +5,8 @@ import (
 	"sync"
 	"time"
 
+	errconst "kratos-demo/internal/consts/error"
+
 	"github.com/pkg/errors"
 )
 
@@ -17,9 +19,9 @@ var timerPool = sync.Pool{New: func() interface{} {
 }}
 
 var (
-	ErrTimeOut         = errors.New("time out")
-	ErrMailOverflow    = errors.New("mail over flow")
-	ErrSyncRequestSelf = errors.New("sync request self")
+	ErrTimeOut         = errconst.ErrActorTimeout
+	ErrMailOverflow    = errconst.ErrActorMailOverflow
+	ErrSyncRequestSelf = errconst.ErrActorSyncRequestSelf
 )
 
 // actorRef 暴露访问actor的接口
@@ -74,7 +76,7 @@ func (p *defaultActorRef) AsyncRequest(message *Message, cb func(resp RespMessag
 func (p *defaultActorRef) Request(message *Message) RespMessage {
 	if p.Id().Equal(message.from) { // sync request to self
 		return RespMessage{
-			Err: errors.Wrap(ErrSyncRequestSelf, fmt.Sprintf("pid %v msg id %d will block", p.Id(), message.Id)),
+			Err: errors.Wrap(errconst.ErrActorSyncRequestSelf, fmt.Sprintf("pid %v msg id %d will block", p.Id(), message.Id)),
 		}
 	}
 
@@ -104,7 +106,7 @@ func (p *defaultActorRef) Request(message *Message) RespMessage {
 		return f
 	case <-timer.C:
 		return RespMessage{
-			Err: errors.Wrap(ErrTimeOut, fmt.Sprintf("pid %v sync request from %v msg id %d", message.from, message.to,
+			Err: errors.Wrap(errconst.ErrActorTimeout, fmt.Sprintf("pid %v sync request from %v msg id %d", message.from, message.to,
 				message.Id)),
 		}
 	}

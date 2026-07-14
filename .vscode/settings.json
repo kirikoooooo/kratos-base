@@ -5,15 +5,8 @@
     "G_MIRROR": "https://golang.google.cn/dl/",
     "GOPROXY": "https://goproxy.cn,direct"
   },
-  "go.goroot": "${env:USERPROFILE}\\.g\\go",
-  "go.gopath": "${env:USERPROFILE}\\go",
-  "go.alternateTools": {
-    "go": "${env:USERPROFILE}\\.g\\go\\bin\\go.exe"
-  },
+  "go.goroot": "/Users/lixiongfei/.gvm/gos/go1.25.1",
   "go.toolsEnvVars": {
-    "GOROOT": "${env:USERPROFILE}\\.g\\go",
-    "GOPATH": "${env:USERPROFILE}\\go",
-    "GOPROXY": "https://goproxy.cn,direct",
-    "PATH": "${env:ProgramFiles}\\TortoiseSVN\\bin;${env:USERPROFILE}\\.g\\go\\bin;${env:USERPROFILE}\\go\\bin;${env:USERPROFILE}\\.g\\bin;${env:USERPROFILE}\\mingw64\\mingw64\\bin;${env:PATH}"
+    "GOPROXY": "https://goproxy.cn,direct"
   }
 }

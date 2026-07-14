@@ -1,4 +1,5 @@
 package memory
+
 import (
 	"context"
 	"os"
@@ -6,8 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"kratos-demo/internal/consts/public"
 	toolcatalog "kratos-demo/third_party/tools"
-	"kratos-demo/internal/data/common"
 )
 
 // BootstrapFileUserMemoryIfEmpty discovers tool hints, skill hints, and default policies
@@ -18,7 +19,7 @@ func BootstrapFileUserMemoryIfEmpty(ctx context.Context, store AgentMemoryStore,
 	}
 	userID = strings.TrimSpace(userID)
 	if userID == "" {
-		userID = common.DefaultMemoryUserID
+		userID = public.DefaultMemoryUserID
 	}
 	workspace = strings.TrimSpace(workspace)
 	if workspace == "" {
@@ -120,29 +121,44 @@ func defaultCommandPolicies() []CommandPolicy {
 }
 
 func discoverSkillHints(workspace string) []SkillHint {
-	root := filepath.Join(workspace, ".agents", "skills")
 	var skillHints []SkillHint
-	_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
-		if err != nil {
+	for _, root := range []string{filepath.Join(workspace, ".agents", "skills"), filepath.Join(workspace, "skills")} {
+		_ = filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() || d.Name() != "SKILL.md" {
+				return nil
+			}
+			rel, relErr := filepath.Rel(workspace, path)
+			if relErr != nil {
+				rel = path
+			}
+			name := skillNameFromPath(rel)
+			desc := readSkillSummary(path)
+			skillHints = append(skillHints, SkillHint{
+				Name:        name,
+				Path:        filepath.ToSlash(rel),
+				WhenToUse:   skillWhenToUse(name),
+				Description: desc,
+			})
 			return nil
-		}
-		if d.IsDir() || d.Name() != "SKILL.md" {
-			return nil
-		}
-		rel, relErr := filepath.Rel(workspace, path)
-		if relErr != nil {
-			rel = path
-		}
-		name := skillNameFromPath(rel)
-		desc := readSkillSummary(path)
-		skillHints = append(skillHints, SkillHint{
-			Name:        name,
-			Path:        filepath.ToSlash(rel),
-			WhenToUse:   skillWhenToUse(name),
-			Description: desc,
 		})
-		return nil
-	})
+	}
+	// Project-owned skills take precedence over bundled compatibility skills.
+	seen := make(map[string]struct{}, len(skillHints))
+	unique := make([]SkillHint, 0, len(skillHints))
+	for i := len(skillHints) - 1; i >= 0; i-- {
+		if _, ok := seen[skillHints[i].Name]; ok {
+			continue
+		}
+		seen[skillHints[i].Name] = struct{}{}
+		unique = append(unique, skillHints[i])
+	}
+	for left, right := 0, len(unique)-1; left < right; left, right = left+1, right-1 {
+		unique[left], unique[right] = unique[right], unique[left]
+	}
+	skillHints = unique
 	if len(skillHints) > 24 {
 		skillHints = skillHints[:24]
 	}

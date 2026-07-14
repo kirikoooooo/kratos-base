@@ -4,7 +4,7 @@ import (
 	"context"
 	"strings"
 
-	"kratos-demo/internal/biz"
+	"kratos-demo/internal/consts/public"
 )
 
 type taskIDContextKey struct{}
@@ -22,17 +22,17 @@ func TaskID(ctx context.Context) string {
 	return taskID
 }
 
-func WithAgent(ctx context.Context, agent biz.AgentKind) context.Context {
+func WithAgent(ctx context.Context, agent public.AgentKind) context.Context {
 	return context.WithValue(ctx, agentContextKey{}, agent)
 }
 
-func Agent(ctx context.Context) biz.AgentKind {
+func Agent(ctx context.Context) public.AgentKind {
 	if ctx == nil {
-		return biz.AgentKindDefault
+		return public.AgentKindDefault
 	}
-	agent, _ := ctx.Value(agentContextKey{}).(biz.AgentKind)
+	agent, _ := ctx.Value(agentContextKey{}).(public.AgentKind)
 	if strings.TrimSpace(string(agent)) == "" {
-		return biz.AgentKindDefault
+		return public.AgentKindDefault
 	}
 	return agent
 }

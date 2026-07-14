@@ -14,6 +14,8 @@ import (
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
+	errconst "kratos-demo/internal/consts/error"
+	"kratos-demo/internal/consts/public"
 	dataagent "kratos-demo/internal/data/agent_runtime"
 	datasession "kratos-demo/internal/data/session"
 	datatasking "kratos-demo/internal/data/tasking"
@@ -21,14 +23,14 @@ import (
 )
 
 type DashboardService struct {
-	trace   datatrace.DelegationTraceStore
-	uc      *biz.AgentRuntimeUsecase
-	memory  dataagent.AgentMemory
+	trace        datatrace.DelegationTraceStore
+	uc           *biz.AgentRuntimeUsecase
+	memory       dataagent.AgentMemory
 	sessionStore datasession.SessionStore
-	config  *conf.Runtime
-	page    *template.Template
-	mu      sync.RWMutex
-	agents  map[biz.AgentKind]*dashboardAgentState
+	config       *conf.Runtime
+	page         *template.Template
+	mu           sync.RWMutex
+	agents       map[public.AgentKind]*dashboardAgentState
 }
 
 type dashboardAgentState struct {
@@ -50,20 +52,20 @@ func NewDashboardService(trace datatrace.DelegationTraceStore, uc *biz.AgentRunt
 		uc:           uc,
 		memory:       memory,
 		sessionStore: sessionStore,
-		config:  config,
-		page:    template.Must(template.New("dashboard").Parse(dashboardTemplate)),
-		agents: map[biz.AgentKind]*dashboardAgentState{
-			biz.AgentKindDefault: {
-				Agent: string(biz.AgentKindDefault),
+		config:       config,
+		page:         template.Must(template.New("dashboard").Parse(dashboardTemplate)),
+		agents: map[public.AgentKind]*dashboardAgentState{
+			public.AgentKindDefault: {
+				Agent: string(public.AgentKindDefault),
 			},
-			biz.AgentKindRouter: {
-				Agent: string(biz.AgentKindRouter),
+			public.AgentKindRouter: {
+				Agent: string(public.AgentKindRouter),
 			},
-			biz.AgentKindCoder: {
-				Agent: string(biz.AgentKindCoder),
+			public.AgentKindCoder: {
+				Agent: string(public.AgentKindCoder),
 			},
-			biz.AgentKindReviewer: {
-				Agent: string(biz.AgentKindReviewer),
+			public.AgentKindReviewer: {
+				Agent: string(public.AgentKindReviewer),
 			},
 		},
 	}
@@ -214,15 +216,15 @@ func (s *DashboardService) handleVerify(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	agent := biz.AgentKind(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("agent"))))
+	agent := public.AgentKind(strings.ToLower(strings.TrimSpace(r.URL.Query().Get("agent"))))
 	if agent == "" {
-		agent = biz.AgentKindCoder
+		agent = public.AgentKindCoder
 	}
 	prompt := strings.TrimSpace(r.URL.Query().Get("prompt"))
 	taskID := fmt.Sprintf("verify-%d", time.Now().UnixNano())
 
 	result, err := s.uc.VerifyDelegation(context.Background(), taskID, agent, prompt)
-	if errors.Is(err, biz.ErrDelegationNotSupported) {
+	if errors.Is(err, errconst.ErrDelegationNotSupported) {
 		writeJSON(w, http.StatusNotImplemented, map[string]any{"error": "runtime does not support verification"})
 		return
 	}
@@ -283,18 +285,18 @@ func (s *DashboardService) enrichSessions(sessions []datatrace.DelegationSession
 		if s.memory != nil {
 			sessions[i].ConversationPreview = s.memory.ConversationPreview(ctx, sessions[i].TaskID)
 			liveUsage := s.memory.ConversationContextUsage(ctx, sessions[i].TaskID, nil)
-				liveTrace := datatrace.ContextUsageSnapshot{
-					EstimatedChars:      liveUsage.EstimatedChars,
-					Threshold:           liveUsage.Threshold,
-					UsagePercent:        liveUsage.UsagePercent,
-					NeedsCompress:       liveUsage.NeedsCompress,
-					CompressCount:       liveUsage.CompressCount,
-					LastOriginalChars:   liveUsage.LastOriginalChars,
-					LastCompressedChars: liveUsage.LastCompressedChars,
-					LastOmittedTurns:    liveUsage.LastOmittedTurns,
-					LastTruncatedTools:  liveUsage.LastTruncatedTools,
-				}
-				sessions[i].ContextUsage = mergeContextUsage(sessions[i].ContextUsage, liveTrace)
+			liveTrace := datatrace.ContextUsageSnapshot{
+				EstimatedChars:      liveUsage.EstimatedChars,
+				Threshold:           liveUsage.Threshold,
+				UsagePercent:        liveUsage.UsagePercent,
+				NeedsCompress:       liveUsage.NeedsCompress,
+				CompressCount:       liveUsage.CompressCount,
+				LastOriginalChars:   liveUsage.LastOriginalChars,
+				LastCompressedChars: liveUsage.LastCompressedChars,
+				LastOmittedTurns:    liveUsage.LastOmittedTurns,
+				LastTruncatedTools:  liveUsage.LastTruncatedTools,
+			}
+			sessions[i].ContextUsage = mergeContextUsage(sessions[i].ContextUsage, liveTrace)
 		}
 		if s.sessionStore != nil {
 			if sess := s.sessionStore.Open(sessions[i].TaskID); sess != nil {
@@ -309,7 +311,7 @@ func (s *DashboardService) agentStates() []dashboardAgentState {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	agents := []biz.AgentKind{biz.AgentKindDefault, biz.AgentKindRouter, biz.AgentKindCoder, biz.AgentKindReviewer}
+	agents := []public.AgentKind{public.AgentKindDefault, public.AgentKindRouter, public.AgentKindCoder, public.AgentKindReviewer}
 	result := make([]dashboardAgentState, 0, len(agents))
 	for _, agent := range agents {
 		state, ok := s.agents[agent]
@@ -323,12 +325,12 @@ func (s *DashboardService) agentStates() []dashboardAgentState {
 }
 
 func (s *DashboardService) StartAllAgents() {
-	for _, agent := range []biz.AgentKind{biz.AgentKindDefault, biz.AgentKindRouter, biz.AgentKindCoder, biz.AgentKindReviewer} {
+	for _, agent := range []public.AgentKind{public.AgentKindDefault, public.AgentKindRouter, public.AgentKindCoder, public.AgentKindReviewer} {
 		s.markAgentStarted(agent)
 	}
 }
 
-func (s *DashboardService) markAgentStarted(agent biz.AgentKind) dashboardAgentState {
+func (s *DashboardService) markAgentStarted(agent public.AgentKind) dashboardAgentState {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -344,7 +346,7 @@ func (s *DashboardService) markAgentStarted(agent biz.AgentKind) dashboardAgentS
 	return *state
 }
 
-func (s *DashboardService) isAgentStarted(agent biz.AgentKind) bool {
+func (s *DashboardService) isAgentStarted(agent public.AgentKind) bool {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -352,7 +354,7 @@ func (s *DashboardService) isAgentStarted(agent biz.AgentKind) bool {
 	return ok && state != nil && state.Started
 }
 
-func (s *DashboardService) rememberAgentTask(agent biz.AgentKind, taskID, prompt string) {
+func (s *DashboardService) rememberAgentTask(agent public.AgentKind, taskID, prompt string) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -365,14 +367,14 @@ func (s *DashboardService) rememberAgentTask(agent biz.AgentKind, taskID, prompt
 	state.LastPrompt = previewDashboardPrompt(prompt)
 }
 
-func (s *DashboardService) runConversation(ctx context.Context, taskID string, agent biz.AgentKind, prompt string) (*taskv1.TaskResult, error) {
+func (s *DashboardService) runConversation(ctx context.Context, taskID string, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	if s.memory != nil {
 		if err := s.memory.StartConversation(ctx, taskID, agent, prompt); err != nil {
 			return nil, fmt.Errorf("start conversation memory: %w", err)
 		}
 	}
 	if s.trace != nil {
-		s.trace.StartTask(taskID, agent, string(datatasking.TaskStatusRunning))
+		s.trace.StartTask(taskID, agent, string(public.TaskStatusRunning))
 		s.trace.UpdatePlan(taskID, datatasking.InitialPlan(agent, prompt))
 		s.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:          time.Now(),
@@ -389,14 +391,14 @@ func (s *DashboardService) runConversation(ctx context.Context, taskID string, a
 	)
 
 	switch agent {
-	case biz.AgentKindDefault:
-		result, err = s.executeAgent(ctx, taskID, biz.AgentKindDefault, prompt)
-	case biz.AgentKindRouter:
+	case public.AgentKindDefault:
+		result, err = s.executeAgent(ctx, taskID, public.AgentKindDefault, prompt)
+	case public.AgentKindRouter:
 		result, err = s.runRouterConversation(ctx, taskID, prompt, true)
-	case biz.AgentKindCoder:
+	case public.AgentKindCoder:
 		result, err = s.runCoderConversation(ctx, taskID, prompt)
-	case biz.AgentKindReviewer:
-		result, err = s.executeAgent(ctx, taskID, biz.AgentKindReviewer, prompt)
+	case public.AgentKindReviewer:
+		result, err = s.executeAgent(ctx, taskID, public.AgentKindReviewer, prompt)
 	default:
 		err = fmt.Errorf("agent %s is not supported by dashboard", agent)
 	}
@@ -418,7 +420,7 @@ func (s *DashboardService) runConversation(ctx context.Context, taskID string, a
 				Stage:  "message_failed",
 				Error:  err.Error(),
 			})
-			s.trace.UpdateTask(taskID, string(datatasking.TaskStatusFailed), nil, err)
+			s.trace.UpdateTask(taskID, string(public.TaskStatusFailed), nil, err)
 		} else {
 			s.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:       time.Now(),
@@ -437,7 +439,7 @@ func (s *DashboardService) runConversation(ctx context.Context, taskID string, a
 				ToolOutput: strings.TrimSpace(result.GetOutput()),
 				DurationMS: 0,
 			})
-			s.trace.UpdateTask(taskID, string(datatasking.TaskStatusDone), result, nil)
+			s.trace.UpdateTask(taskID, string(public.TaskStatusDone), result, nil)
 		}
 	}
 
@@ -446,20 +448,20 @@ func (s *DashboardService) runConversation(ctx context.Context, taskID string, a
 
 func (s *DashboardService) runRouterConversation(ctx context.Context, taskID, prompt string, allowDelegate bool) (*taskv1.TaskResult, error) {
 	if allowDelegate && shouldDelegateToCoder(prompt) {
-		if !s.isAgentStarted(biz.AgentKindCoder) {
+		if !s.isAgentStarted(public.AgentKindCoder) {
 			return nil, errors.New("coder agent is not started")
 		}
 		if s.trace != nil {
 			s.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:          time.Now(),
 				TaskID:        taskID,
-				Agent:         string(biz.AgentKindRouter),
+				Agent:         string(public.AgentKindRouter),
 				Stage:         "delegate_local",
-				Mode:          string(biz.AgentKindCoder),
+				Mode:          string(public.AgentKindCoder),
 				PromptPreview: previewDashboardPrompt(prompt),
 			})
 		}
-		result, err := s.executeAgent(ctx, taskID, biz.AgentKindCoder, prompt)
+		result, err := s.executeAgent(ctx, taskID, public.AgentKindCoder, prompt)
 		if err != nil {
 			return nil, err
 		}
@@ -470,26 +472,26 @@ func (s *DashboardService) runRouterConversation(ctx context.Context, taskID, pr
 		s.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:          time.Now(),
 			TaskID:        taskID,
-			Agent:         string(biz.AgentKindRouter),
+			Agent:         string(public.AgentKindRouter),
 			Stage:         "handle_direct",
 			PromptPreview: previewDashboardPrompt(prompt),
 		})
 	}
-	return s.executeAgent(ctx, taskID, biz.AgentKindRouter, prompt)
+	return s.executeAgent(ctx, taskID, public.AgentKindRouter, prompt)
 }
 
 func (s *DashboardService) runCoderConversation(ctx context.Context, taskID, prompt string) (*taskv1.TaskResult, error) {
 	if shouldDelegateToRouter(prompt) {
-		if !s.isAgentStarted(biz.AgentKindRouter) {
+		if !s.isAgentStarted(public.AgentKindRouter) {
 			return nil, errors.New("router agent is not started")
 		}
 		if s.trace != nil {
 			s.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:          time.Now(),
 				TaskID:        taskID,
-				Agent:         string(biz.AgentKindCoder),
+				Agent:         string(public.AgentKindCoder),
 				Stage:         "delegate_local",
-				Mode:          string(biz.AgentKindRouter),
+				Mode:          string(public.AgentKindRouter),
 				PromptPreview: previewDashboardPrompt(prompt),
 			})
 		}
@@ -504,17 +506,17 @@ func (s *DashboardService) runCoderConversation(ctx context.Context, taskID, pro
 		s.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:          time.Now(),
 			TaskID:        taskID,
-			Agent:         string(biz.AgentKindCoder),
+			Agent:         string(public.AgentKindCoder),
 			Stage:         "handle_direct",
 			PromptPreview: previewDashboardPrompt(prompt),
 		})
 	}
-	return s.executeAgent(ctx, taskID, biz.AgentKindCoder, prompt)
+	return s.executeAgent(ctx, taskID, public.AgentKindCoder, prompt)
 }
 
-func (s *DashboardService) executeAgent(ctx context.Context, taskID string, agent biz.AgentKind, prompt string) (*taskv1.TaskResult, error) {
+func (s *DashboardService) executeAgent(ctx context.Context, taskID string, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	if s == nil || s.uc == nil {
-		return nil, biz.ErrAgentRuntimeUnavailable
+		return nil, errconst.ErrAgentRuntimeUnavailable
 	}
 	return s.uc.ExecuteTask(ctx, &taskv1.TaskCommand{
 		TaskID: taskID,
@@ -523,14 +525,14 @@ func (s *DashboardService) executeAgent(ctx context.Context, taskID string, agen
 	})
 }
 
-func dashboardSessionID(agent biz.AgentKind) string {
+func dashboardSessionID(agent public.AgentKind) string {
 	return fmt.Sprintf("dashboard-%s", strings.TrimSpace(string(agent)))
 }
 
-func normalizeDashboardAgent(raw string) (biz.AgentKind, error) {
-	agent := biz.AgentKind(strings.ToLower(strings.TrimSpace(raw)))
+func normalizeDashboardAgent(raw string) (public.AgentKind, error) {
+	agent := public.AgentKind(strings.ToLower(strings.TrimSpace(raw)))
 	switch agent {
-	case biz.AgentKindDefault, biz.AgentKindRouter, biz.AgentKindCoder, biz.AgentKindReviewer:
+	case public.AgentKindDefault, public.AgentKindRouter, public.AgentKindCoder, public.AgentKindReviewer:
 		return agent, nil
 	default:
 		return "", fmt.Errorf("unsupported dashboard agent: %s", raw)

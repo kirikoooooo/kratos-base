@@ -2,11 +2,14 @@ package common
 
 import (
 	"strings"
+
+	"kratos-demo/internal/consts/public"
 )
 
+// Re-export from consts/public for backward compatibility.
 const (
-	DefaultMemoryDir    = ".myagent"
-	DefaultMemoryUserID = "default"
+	DefaultMemoryDir    = public.DefaultMemoryDir
+	DefaultMemoryUserID = public.DefaultMemoryUserID
 )
 
 func PreviewPrompt(prompt string) string {

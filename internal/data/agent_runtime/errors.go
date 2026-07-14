@@ -1,5 +1,5 @@
 package agent
 
-import "errors"
+import errconst "kratos-demo/internal/consts/error"
 
-var ErrAgentNotSupported = errors.New("agent is not supported")
+var ErrAgentNotSupported = errconst.ErrAgentNotSupported

@@ -34,7 +34,9 @@ func TestBuildFallbackFailureAnalysis(t *testing.T) {
 
 type absolutePathError struct{}
 
-func (absolutePathError) Error() string { return "tool write_file failed: absolute paths are not allowed" }
+func (absolutePathError) Error() string {
+	return "tool write_file failed: absolute paths are not allowed"
+}
 
 func errAbsolutePath() error { return absolutePathError{} }
 

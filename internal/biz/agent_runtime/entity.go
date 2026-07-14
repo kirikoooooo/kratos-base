@@ -1,12 +1,6 @@
 package agent_runtime
 
-// AgentKind identifies a specific agent role/capability (e.g. coder, reviewer).
-type AgentKind string
+import "kratos-demo/internal/consts/public"
 
-const (
-	AgentKindDefault  AgentKind = "default"
-	AgentKindGeneric  AgentKind = "generic"
-	AgentKindRouter   AgentKind = "router"
-	AgentKindCoder    AgentKind = "coder"
-	AgentKindReviewer AgentKind = "reviewer"
-)
+// AgentKind identifies a specific agent role/capability (e.g. coder, reviewer).
+type AgentKind = public.AgentKind

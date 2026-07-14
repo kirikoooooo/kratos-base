@@ -2,31 +2,31 @@ package tasking
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	taskv1 "kratos-demo/api/task/v1"
-	"kratos-demo/internal/biz"
+	errconst "kratos-demo/internal/consts/error"
+	"kratos-demo/internal/consts/public"
 )
 
 var (
-	ErrPromptRequired            = errors.New("prompt is required")
-	ErrTaskNotFound              = errors.New("task not found")
-	ErrTaskDispatcherUnavailable = errors.New("task dispatcher is unavailable")
+	ErrPromptRequired            = errconst.ErrPromptRequired
+	ErrTaskNotFound              = errconst.ErrTaskNotFound
+	ErrTaskDispatcherUnavailable = errconst.ErrTaskDispatcherUnavailable
 )
 
-type TaskStatus string
+type TaskStatus = public.TaskStatus
 
 const (
-	TaskStatusPending TaskStatus = "pending"
-	TaskStatusRunning TaskStatus = "running"
-	TaskStatusDone    TaskStatus = "done"
-	TaskStatusFailed  TaskStatus = "failed"
+	TaskStatusPending = public.TaskStatusPending
+	TaskStatusRunning = public.TaskStatusRunning
+	TaskStatusDone    = public.TaskStatusDone
+	TaskStatusFailed  = public.TaskStatusFailed
 )
 
 type Task struct {
 	ID        string             `json:"task_id"`
-	Agent     biz.AgentKind          `json:"agent"`
+	Agent     public.AgentKind   `json:"agent"`
 	Prompt    string             `json:"prompt"`
 	Status    TaskStatus         `json:"status"`
 	Result    *taskv1.TaskResult `json:"result,omitempty"`

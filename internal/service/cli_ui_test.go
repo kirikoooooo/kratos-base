@@ -25,10 +25,10 @@ func TestRenderCLIBlocksWithFence(t *testing.T) {
 
 func TestFormatCLIEventLineTool(t *testing.T) {
 	line := formatCLIEventLine(datatrace.DelegationEvent{
-		Stage:    "tool_read_file",
-		ToolName: "read_file",
+		Stage:     "tool_read_file",
+		ToolName:  "read_file",
 		ToolInput: "README.md",
-		Agent:    "router",
+		Agent:     "router",
 	}, false)
 	if !strings.Contains(line, "read_file") || !strings.Contains(line, "README.md") {
 		t.Fatalf("unexpected line: %q", line)

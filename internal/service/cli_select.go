@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"kratos-demo/internal/consts/public"
+
 	"golang.org/x/term"
 )
 
@@ -84,7 +86,7 @@ func promptSelect(out io.Writer, in io.Reader, paint func(string, string) string
 
 	fmt.Fprint(out, "\033[?25l")
 	selected := defaultIndex
-	paintedHint := paint(ansiDim, hint)
+	paintedHint := paint(public.AnsiDim, hint)
 
 	draw := func() {
 		lines := buildModelSelectLines(paintedHint, options, selected, paint)
@@ -137,7 +139,7 @@ func buildModelSelectLines(hint string, options []string, selected int, paint fu
 	for i, label := range options {
 		row := "    " + label
 		if i == selected {
-			row = paint(ansiCyan, "  ❯ ") + paint(ansiBold, label)
+			row = paint(public.AnsiCyan, "  ❯ ") + paint(public.AnsiBold, label)
 		}
 		lines = append(lines, row)
 	}

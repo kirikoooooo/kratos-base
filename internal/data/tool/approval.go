@@ -2,14 +2,14 @@ package tool
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 
+	errconst "kratos-demo/internal/consts/error"
 	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 )
 
-var ErrRiskApprovalDenied = errors.New("operation denied by user")
+var ErrRiskApprovalDenied = errconst.ErrRiskApprovalDenied
 
 func requireRiskApproval(ctx context.Context, action agentctx.RiskAction) error {
 	action.Tool = strings.TrimSpace(action.Tool)

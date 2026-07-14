@@ -257,6 +257,7 @@ func (x *Data) GetAgentMemory() *Data_AgentMemory {
 type Runtime struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Remotes       []*Runtime_RemoteAgent `protobuf:"bytes,1,rep,name=remotes,proto3" json:"remotes,omitempty"`
+	McpServers    []*Runtime_MCPServer   `protobuf:"bytes,2,rep,name=mcp_servers,json=mcpServers,proto3" json:"mcp_servers,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -294,6 +295,13 @@ func (*Runtime) Descriptor() ([]byte, []int) {
 func (x *Runtime) GetRemotes() []*Runtime_RemoteAgent {
 	if x != nil {
 		return x.Remotes
+	}
+	return nil
+}
+
+func (x *Runtime) GetMcpServers() []*Runtime_MCPServer {
+	if x != nil {
+		return x.McpServers
 	}
 	return nil
 }
@@ -686,6 +694,85 @@ func (x *Data_AgentMemory) GetToolOutputMaxChars() int32 {
 	return 0
 }
 
+type Runtime_MCPServer struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// 唯一名称，仅用于日志和工具来源标识。
+	Name string `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// stdio MCP 服务启动命令，例如 uv。
+	Command string   `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`
+	Args    []string `protobuf:"bytes,3,rep,name=args,proto3" json:"args,omitempty"`
+	// 初始化及单次工具调用超时（秒），默认 30。
+	TimeoutSeconds int64                            `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	Env            []*Runtime_MCPServer_Environment `protobuf:"bytes,5,rep,name=env,proto3" json:"env,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *Runtime_MCPServer) Reset() {
+	*x = Runtime_MCPServer{}
+	mi := &file_internal_conf_conf_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Runtime_MCPServer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Runtime_MCPServer) ProtoMessage() {}
+
+func (x *Runtime_MCPServer) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Runtime_MCPServer.ProtoReflect.Descriptor instead.
+func (*Runtime_MCPServer) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0}
+}
+
+func (x *Runtime_MCPServer) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Runtime_MCPServer) GetCommand() string {
+	if x != nil {
+		return x.Command
+	}
+	return ""
+}
+
+func (x *Runtime_MCPServer) GetArgs() []string {
+	if x != nil {
+		return x.Args
+	}
+	return nil
+}
+
+func (x *Runtime_MCPServer) GetTimeoutSeconds() int64 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+func (x *Runtime_MCPServer) GetEnv() []*Runtime_MCPServer_Environment {
+	if x != nil {
+		return x.Env
+	}
+	return nil
+}
+
 type Runtime_RemoteAgent struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Agent         string                 `protobuf:"bytes,1,opt,name=agent,proto3" json:"agent,omitempty"`
@@ -697,7 +784,7 @@ type Runtime_RemoteAgent struct {
 
 func (x *Runtime_RemoteAgent) Reset() {
 	*x = Runtime_RemoteAgent{}
-	mi := &file_internal_conf_conf_proto_msgTypes[11]
+	mi := &file_internal_conf_conf_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -709,7 +796,7 @@ func (x *Runtime_RemoteAgent) String() string {
 func (*Runtime_RemoteAgent) ProtoMessage() {}
 
 func (x *Runtime_RemoteAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[11]
+	mi := &file_internal_conf_conf_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -722,7 +809,7 @@ func (x *Runtime_RemoteAgent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Runtime_RemoteAgent.ProtoReflect.Descriptor instead.
 func (*Runtime_RemoteAgent) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 1}
 }
 
 func (x *Runtime_RemoteAgent) GetAgent() string {
@@ -744,6 +831,58 @@ func (x *Runtime_RemoteAgent) GetTimeout() int64 {
 		return x.Timeout
 	}
 	return 0
+}
+
+type Runtime_MCPServer_Environment struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Key           string                 `protobuf:"bytes,1,opt,name=key,proto3" json:"key,omitempty"`
+	Value         string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Runtime_MCPServer_Environment) Reset() {
+	*x = Runtime_MCPServer_Environment{}
+	mi := &file_internal_conf_conf_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Runtime_MCPServer_Environment) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Runtime_MCPServer_Environment) ProtoMessage() {}
+
+func (x *Runtime_MCPServer_Environment) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Runtime_MCPServer_Environment.ProtoReflect.Descriptor instead.
+func (*Runtime_MCPServer_Environment) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0, 0}
+}
+
+func (x *Runtime_MCPServer_Environment) GetKey() string {
+	if x != nil {
+		return x.Key
+	}
+	return ""
+}
+
+func (x *Runtime_MCPServer_Environment) GetValue() string {
+	if x != nil {
+		return x.Value
+	}
+	return ""
 }
 
 var File_internal_conf_conf_proto protoreflect.FileDescriptor
@@ -793,9 +932,20 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12<\n" +
 	"\x1acontext_compress_threshold\x18\x03 \x01(\x03R\x18contextCompressThreshold\x12*\n" +
 	"\x11keep_recent_turns\x18\x04 \x01(\x05R\x0fkeepRecentTurns\x121\n" +
-	"\x15tool_output_max_chars\x18\x05 \x01(\x05R\x12toolOutputMaxChars\"\x9b\x01\n" +
+	"\x15tool_output_max_chars\x18\x05 \x01(\x05R\x12toolOutputMaxChars\"\xc8\x03\n" +
 	"\aRuntime\x129\n" +
-	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x1aU\n" +
+	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x12>\n" +
+	"\vmcp_servers\x18\x02 \x03(\v2\x1d.kratos.api.Runtime.MCPServerR\n" +
+	"mcpServers\x1a\xea\x01\n" +
+	"\tMCPServer\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
+	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
+	"\x04args\x18\x03 \x03(\tR\x04args\x12'\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x03R\x0etimeoutSeconds\x12;\n" +
+	"\x03env\x18\x05 \x03(\v2).kratos.api.Runtime.MCPServer.EnvironmentR\x03env\x1a5\n" +
+	"\vEnvironment\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value\x1aU\n" +
 	"\vRemoteAgent\x12\x14\n" +
 	"\x05agent\x18\x01 \x01(\tR\x05agent\x12\x16\n" +
 	"\x06target\x18\x02 \x01(\tR\x06target\x12\x18\n" +
@@ -813,20 +963,22 @@ func file_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_internal_conf_conf_proto_rawDescData
 }
 
-var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
+var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
 var file_internal_conf_conf_proto_goTypes = []any{
-	(*Bootstrap)(nil),           // 0: kratos.api.Bootstrap
-	(*AI)(nil),                  // 1: kratos.api.AI
-	(*Server)(nil),              // 2: kratos.api.Server
-	(*Data)(nil),                // 3: kratos.api.Data
-	(*Runtime)(nil),             // 4: kratos.api.Runtime
-	(*AI_OpenAI)(nil),           // 5: kratos.api.AI.OpenAI
-	(*AI_DeepSeek)(nil),         // 6: kratos.api.AI.DeepSeek
-	(*Server_HTTP)(nil),         // 7: kratos.api.Server.HTTP
-	(*Server_GRPC)(nil),         // 8: kratos.api.Server.GRPC
-	(*Data_Database)(nil),       // 9: kratos.api.Data.Database
-	(*Data_AgentMemory)(nil),    // 10: kratos.api.Data.AgentMemory
-	(*Runtime_RemoteAgent)(nil), // 11: kratos.api.Runtime.RemoteAgent
+	(*Bootstrap)(nil),                     // 0: kratos.api.Bootstrap
+	(*AI)(nil),                            // 1: kratos.api.AI
+	(*Server)(nil),                        // 2: kratos.api.Server
+	(*Data)(nil),                          // 3: kratos.api.Data
+	(*Runtime)(nil),                       // 4: kratos.api.Runtime
+	(*AI_OpenAI)(nil),                     // 5: kratos.api.AI.OpenAI
+	(*AI_DeepSeek)(nil),                   // 6: kratos.api.AI.DeepSeek
+	(*Server_HTTP)(nil),                   // 7: kratos.api.Server.HTTP
+	(*Server_GRPC)(nil),                   // 8: kratos.api.Server.GRPC
+	(*Data_Database)(nil),                 // 9: kratos.api.Data.Database
+	(*Data_AgentMemory)(nil),              // 10: kratos.api.Data.AgentMemory
+	(*Runtime_MCPServer)(nil),             // 11: kratos.api.Runtime.MCPServer
+	(*Runtime_RemoteAgent)(nil),           // 12: kratos.api.Runtime.RemoteAgent
+	(*Runtime_MCPServer_Environment)(nil), // 13: kratos.api.Runtime.MCPServer.Environment
 }
 var file_internal_conf_conf_proto_depIdxs = []int32{
 	2,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
@@ -839,12 +991,14 @@ var file_internal_conf_conf_proto_depIdxs = []int32{
 	8,  // 7: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
 	9,  // 8: kratos.api.Data.database:type_name -> kratos.api.Data.Database
 	10, // 9: kratos.api.Data.agent_memory:type_name -> kratos.api.Data.AgentMemory
-	11, // 10: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
-	11, // [11:11] is the sub-list for method output_type
-	11, // [11:11] is the sub-list for method input_type
-	11, // [11:11] is the sub-list for extension type_name
-	11, // [11:11] is the sub-list for extension extendee
-	0,  // [0:11] is the sub-list for field type_name
+	12, // 10: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
+	11, // 11: kratos.api.Runtime.mcp_servers:type_name -> kratos.api.Runtime.MCPServer
+	13, // 12: kratos.api.Runtime.MCPServer.env:type_name -> kratos.api.Runtime.MCPServer.Environment
+	13, // [13:13] is the sub-list for method output_type
+	13, // [13:13] is the sub-list for method input_type
+	13, // [13:13] is the sub-list for extension type_name
+	13, // [13:13] is the sub-list for extension extendee
+	0,  // [0:13] is the sub-list for field type_name
 }
 
 func init() { file_internal_conf_conf_proto_init() }
@@ -858,7 +1012,7 @@ func file_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_conf_conf_proto_rawDesc), len(file_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   12,
+			NumMessages:   14,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

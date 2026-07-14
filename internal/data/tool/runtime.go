@@ -1,11 +1,12 @@
 package tool
+
 import (
-	agentfile "kratos-demo/internal/data/agent_runtime/file"
-	"kratos-demo/internal/data/common"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	agentfile "kratos-demo/internal/data/agent_runtime/file"
+	"kratos-demo/internal/data/common"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,16 +15,16 @@ import (
 	"strings"
 	"time"
 
-	toolcatalog "kratos-demo/third_party/tools"
 	biztool "kratos-demo/internal/biz/tool"
+	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 	datasession "kratos-demo/internal/data/session"
 	datatrace "kratos-demo/internal/data/trace"
-	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
+	toolcatalog "kratos-demo/third_party/tools"
 )
 
 type Runtime struct {
-	root    string
-	trace   datatrace.DelegationTraceStore
+	root     string
+	trace    datatrace.DelegationTraceStore
 	sessions datasession.SessionStore
 }
 
@@ -46,7 +47,49 @@ func (r *Runtime) Bindings() []toolcatalog.BindingSpec {
 		{Name: "write_file", Handler: r.writeFile},
 		{Name: "delete_file", Handler: r.deleteFile},
 		{Name: "exec_command", Handler: r.execCommand},
+		{Name: "load_skill", Handler: r.loadSkill},
 	}
+}
+
+// loadSkill exposes the full, local skill instructions only when an agent asks
+// for a discovered skill. The explicit root check keeps skill loading scoped.
+func (r *Runtime) loadSkill(ctx context.Context, input string) (string, error) {
+	name := strings.TrimSpace(input)
+	if strings.HasPrefix(name, "{") {
+		var payload struct {
+			Name string `json:"name"`
+		}
+		if err := json.Unmarshal([]byte(name), &payload); err == nil {
+			name = strings.TrimSpace(payload.Name)
+		}
+	}
+	if name == "" || strings.Contains(name, "..") || filepath.IsAbs(name) {
+		return "", errors.New("skill name must be a relative skill directory name")
+	}
+	var raw []byte
+	var path string
+	for _, root := range []string{filepath.Join(r.root, ".agents", "skills"), filepath.Join(r.root, "skills")} {
+		candidate := filepath.Join(root, filepath.FromSlash(name), "SKILL.md")
+		rel, err := filepath.Rel(root, candidate)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return "", errors.New("skill path escapes configured skill roots")
+		}
+		raw, err = os.ReadFile(candidate)
+		if err == nil {
+			path = candidate
+			break
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("load skill %s: %w", name, err)
+		}
+	}
+	if path == "" {
+		return "", fmt.Errorf("load skill %s: not found", name)
+	}
+	rel, _ := filepath.Rel(r.root, path)
+	output := "path: " + filepath.ToSlash(rel) + "\n\n" + string(raw)
+	r.appendToolEvent(ctx, "tool_load_skill", "load_skill", name, output, "", 0)
+	return output, nil
 }
 
 func (r *Runtime) readFile(ctx context.Context, input string) (string, error) {

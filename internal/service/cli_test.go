@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
+	"kratos-demo/internal/consts/public"
 )
 
 func TestCLIServiceStartsAllAgentsAndHandlesHelp(t *testing.T) {
@@ -28,7 +28,7 @@ func TestCLIServiceStartsAllAgentsAndHandlesHelp(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	for _, agent := range []biz.AgentKind{biz.AgentKindDefault, biz.AgentKindRouter, biz.AgentKindCoder, biz.AgentKindReviewer} {
+	for _, agent := range []public.AgentKind{public.AgentKindDefault, public.AgentKindRouter, public.AgentKindCoder, public.AgentKindReviewer} {
 		if !dash.isAgentStarted(agent) {
 			t.Fatalf("agent %s was not started", agent)
 		}

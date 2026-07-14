@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "load_skill",
+    "description": "按名称加载工作区 .agents/skills 下的 SKILL.md 完整指令。仅在任务明确匹配已发现 Skill 时调用。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "Skill 目录名，可传 rag-search 或 JSON 字符串 {\"name\":\"rag-search\"}。"
+        }
+      },
+      "required": ["input"],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

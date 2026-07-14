@@ -9,17 +9,7 @@ import (
 	"strings"
 
 	"kratos-demo/internal/conf"
-	"kratos-demo/internal/data/common"
-)
-
-const (
-	defaultCLIOpenAIBaseURL   = "https://api.openai-proxy.org/v1"
-	defaultCLIDeepSeekBaseURL = "https://api.deepseek.com"
-)
-
-const (
-	ProviderOpenAI   = "openai"
-	ProviderDeepSeek = "deepseek"
+	"kratos-demo/internal/consts/public"
 )
 
 // CLICredentials stores user-provided API settings for CLI mode.
@@ -32,17 +22,17 @@ type CLICredentials struct {
 func effectiveProvider(ai *conf.AI) string {
 	p := strings.TrimSpace(strings.ToLower(ai.GetProvider()))
 	if p == "" {
-		return ProviderOpenAI
+		return public.ProviderOpenAI
 	}
 	return p
 }
 
 func defaultBaseURLForProvider(provider string) string {
 	switch provider {
-	case ProviderDeepSeek:
-		return defaultCLIDeepSeekBaseURL
+	case public.ProviderDeepSeek:
+		return public.DefaultCLIDeepSeekBaseURL
 	default:
-		return defaultCLIOpenAIBaseURL
+		return public.DefaultCLIOpenAIBaseURL
 	}
 }
 
@@ -51,7 +41,7 @@ func cliCredentialsPath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(wd, common.DefaultMemoryDir)
+	dir := filepath.Join(wd, public.DefaultMemoryDir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", fmt.Errorf("create credentials dir: %w", err)
 	}
@@ -110,7 +100,7 @@ func ApplyCLICredentials(ai *conf.AI, creds *CLICredentials) {
 	baseURL := strings.TrimSpace(creds.BaseURL)
 
 	switch effectiveProvider(ai) {
-	case ProviderDeepSeek:
+	case public.ProviderDeepSeek:
 		if ai.Deepseek == nil {
 			ai.Deepseek = &conf.AI_DeepSeek{}
 		}
@@ -139,7 +129,7 @@ func aiConfigReady(ai *conf.AI) bool {
 		return false
 	}
 	switch effectiveProvider(ai) {
-	case ProviderDeepSeek:
+	case public.ProviderDeepSeek:
 		if ai.Deepseek == nil {
 			return false
 		}
@@ -157,7 +147,7 @@ func aiConfigReady(ai *conf.AI) bool {
 // providerLabel 返回 provider 的中文展示名。
 func providerLabel(ai *conf.AI) string {
 	switch effectiveProvider(ai) {
-	case ProviderDeepSeek:
+	case public.ProviderDeepSeek:
 		return "DeepSeek"
 	default:
 		return "OpenAI 兼容"

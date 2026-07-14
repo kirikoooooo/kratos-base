@@ -32,7 +32,7 @@ func newCLILineReader(in io.Reader, ui *cliUI, onShiftTab func()) (*cliLineReade
 			FuncFilterInputRune:    filterCLIInputRune,
 			InterruptPrompt:        "^C",
 			EOFPrompt:              "exit",
-				AutoComplete:           slashCommandCompleter(),
+			AutoComplete:           slashCommandCompleter(),
 		})
 		if err != nil {
 			return nil, err

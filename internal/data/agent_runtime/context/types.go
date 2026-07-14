@@ -6,13 +6,13 @@ import (
 
 // Re-export domain types from biz/conversation for backward compatibility.
 type (
-	ConversationRole      = bizconversation.ConversationRole
-	ConversationToolCall  = bizconversation.ConversationToolCall
-	ConversationTurn      = bizconversation.ConversationTurn
-	CompressConfig        = bizconversation.CompressConfig
-	CompressStats         = bizconversation.CompressStats
-	PrepareMeta           = bizconversation.PrepareMeta
-	CompressResult        = bizconversation.CompressResult
+	ConversationRole     = bizconversation.ConversationRole
+	ConversationToolCall = bizconversation.ConversationToolCall
+	ConversationTurn     = bizconversation.ConversationTurn
+	CompressConfig       = bizconversation.CompressConfig
+	CompressStats        = bizconversation.CompressStats
+	PrepareMeta          = bizconversation.PrepareMeta
+	CompressResult       = bizconversation.CompressResult
 )
 
 const (

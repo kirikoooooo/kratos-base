@@ -72,6 +72,24 @@ message Data {
 }
 
 message Runtime {
+
+  message MCPServer {
+
+    message Environment {
+      string key = 1;
+      string value = 2;
+    }
+
+    // 唯一名称，仅用于日志和工具来源标识。
+    string name = 1;
+    // stdio MCP 服务启动命令，例如 uv。
+    string command = 2;
+    repeated string args = 3;
+    // 初始化及单次工具调用超时（秒），默认 30。
+    int64 timeout_seconds = 4;
+    repeated Environment env = 5;
+  }
+
   message RemoteAgent {
     string agent = 1;
     string target = 2;
@@ -79,4 +97,5 @@ message Runtime {
   }
 
   repeated RemoteAgent remotes = 1;
+  repeated MCPServer mcp_servers = 2;
 }

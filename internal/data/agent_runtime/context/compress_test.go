@@ -1,8 +1,8 @@
 package context
+
 import (
 	"strings"
 	"testing"
-
 )
 
 func TestEstimateConversationContextSize(t *testing.T) {

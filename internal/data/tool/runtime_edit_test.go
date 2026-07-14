@@ -1,4 +1,5 @@
 package tool
+
 import (
 	"context"
 	"encoding/json"
@@ -7,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
+	"kratos-demo/internal/consts/public"
 	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
-	"kratos-demo/internal/biz"
 	datatrace "kratos-demo/internal/data/trace"
 )
 
@@ -55,10 +56,10 @@ func TestEditFileSearchReplace(t *testing.T) {
 	}
 
 	input, _ := json.Marshal(map[string]any{
-		"path":        "a.txt",
-		"operation":   "search_replace",
-		"old_string":  "bar",
-		"new_string":  "baz",
+		"path":       "a.txt",
+		"operation":  "search_replace",
+		"old_string": "bar",
+		"new_string": "baz",
 	})
 	if _, err := tools.editFile(ctx, string(input)); err != nil {
 		t.Fatalf("editFile() error = %v", err)
@@ -204,6 +205,6 @@ func setupLocalToolsTest(t *testing.T) (*Runtime, context.Context, string) {
 		_ = os.Chdir(prevWD)
 	})
 	tools.root = dir
-	ctx := agentctx.WithAgent(agentctx.WithTaskID(context.Background(), "edit-tool-task"), biz.AgentKindDefault)
+	ctx := agentctx.WithAgent(agentctx.WithTaskID(context.Background(), "edit-tool-task"), public.AgentKindDefault)
 	return tools, ctx, dir
 }

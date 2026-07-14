@@ -3,12 +3,12 @@ package tasking
 import (
 	"testing"
 
-	"kratos-demo/internal/biz"
+	"kratos-demo/internal/consts/public"
 	datatrace "kratos-demo/internal/data/trace"
 )
 
 func TestInitialPlanAndAdvance(t *testing.T) {
-	plan := initialPlan(biz.AgentKindDefault, "请读 README 然后总结")
+	plan := initialPlan(public.AgentKindDefault, "请读 README 然后总结")
 	if len(plan) < 4 {
 		t.Fatalf("initialPlan() steps = %d, want >= 4", len(plan))
 	}

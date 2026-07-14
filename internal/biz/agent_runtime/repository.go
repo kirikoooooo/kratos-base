@@ -2,16 +2,16 @@ package agent_runtime
 
 import (
 	"context"
-	"errors"
 
 	taskv1 "kratos-demo/api/task/v1"
+	errconst "kratos-demo/internal/consts/error"
 	actorpkg "kratos-demo/third_party/actor"
 )
 
 var (
-	ErrAgentRuntimeUnavailable = errors.New("agent runtime is not available")
-	ErrAgentNotSupported       = errors.New("agent is not supported")
-	ErrDelegationNotSupported  = errors.New("delegation verification is not supported")
+	ErrAgentRuntimeUnavailable = errconst.ErrAgentRuntimeUnavailable
+	ErrAgentNotSupported       = errconst.ErrAgentNotSupported
+	ErrDelegationNotSupported  = errconst.ErrDelegationNotSupported
 )
 
 // AgentRuntime is the core abstraction for any agent runtime implementation.

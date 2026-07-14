@@ -4,12 +4,12 @@ import (
 	"time"
 
 	taskv1 "kratos-demo/api/task/v1"
-	"kratos-demo/internal/biz"
+	"kratos-demo/internal/consts/public"
 	datasession "kratos-demo/internal/data/session"
 )
 
 type DelegationTraceStore interface {
-	StartTask(taskID string, agent biz.AgentKind, status string)
+	StartTask(taskID string, agent public.AgentKind, status string)
 	UpdateTask(taskID string, status string, result *taskv1.TaskResult, err error)
 	AppendEvent(event DelegationEvent)
 	UpdatePlan(taskID string, steps []PlanStep)
@@ -67,17 +67,17 @@ type ContextCompressResult struct {
 }
 
 type DelegationSession struct {
-	TaskID              string                         `json:"task_id"`
-	RootAgent           string                         `json:"root_agent"`
-	ConversationPreview string                         `json:"conversation_preview,omitempty"`
-	Status              string                         `json:"status"`
-	ResultSummary       string                         `json:"result_summary,omitempty"`
-	ResultOutput        string                         `json:"result_output,omitempty"`
-	Error               string                         `json:"error,omitempty"`
-	CreatedAt           time.Time                      `json:"created_at"`
-	UpdatedAt           time.Time                      `json:"updated_at"`
-	Plan                []PlanStep                     `json:"plan,omitempty"`
-	Events              []DelegationEvent              `json:"events"`
+	TaskID              string                          `json:"task_id"`
+	RootAgent           string                          `json:"root_agent"`
+	ConversationPreview string                          `json:"conversation_preview,omitempty"`
+	Status              string                          `json:"status"`
+	ResultSummary       string                          `json:"result_summary,omitempty"`
+	ResultOutput        string                          `json:"result_output,omitempty"`
+	Error               string                          `json:"error,omitempty"`
+	CreatedAt           time.Time                       `json:"created_at"`
+	UpdatedAt           time.Time                       `json:"updated_at"`
+	Plan                []PlanStep                      `json:"plan,omitempty"`
+	Events              []DelegationEvent               `json:"events"`
 	FileChanges         []datasession.SessionFileChange `json:"file_changes,omitempty"`
-	ContextUsage        ContextUsageSnapshot           `json:"context_usage,omitempty"`
+	ContextUsage        ContextUsageSnapshot            `json:"context_usage,omitempty"`
 }

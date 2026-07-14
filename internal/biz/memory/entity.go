@@ -8,10 +8,10 @@ import (
 
 // SessionConversation stores the full conversation history for a session.
 type SessionConversation struct {
-	SessionID string                         `json:"session_id"`
-	Agent     string                         `json:"agent,omitempty"`
+	SessionID string                             `json:"session_id"`
+	Agent     string                             `json:"agent,omitempty"`
 	Turns     []bizconversation.ConversationTurn `json:"turns,omitempty"`
-	UpdatedAt time.Time                      `json:"updated_at"`
+	UpdatedAt time.Time                          `json:"updated_at"`
 }
 
 // CommandPolicy describes a situational command-execution policy.

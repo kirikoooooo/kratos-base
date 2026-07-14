@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"kratos-demo/internal/consts/public"
 	"kratos-demo/internal/data/common"
 	datatrace "kratos-demo/internal/data/trace"
 )
@@ -49,7 +50,7 @@ func cliLogDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(workspace, common.DefaultMemoryDir, "log")
+	dir := filepath.Join(workspace, public.DefaultMemoryDir, "log")
 	if !filepath.IsAbs(dir) {
 		dir = filepath.Join(workspace, dir)
 	}

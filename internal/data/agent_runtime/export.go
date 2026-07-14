@@ -3,10 +3,10 @@ package agent
 import agentmemory "kratos-demo/internal/data/memory"
 
 type (
-	AgentMemory          = agentmemory.AgentMemory
-	AgentMemoryStore     = agentmemory.AgentMemoryStore
-	AgentMemoryConfig    = agentmemory.AgentMemoryConfig
-	SessionErrorRecord   = agentmemory.SessionErrorRecord
+	AgentMemory        = agentmemory.AgentMemory
+	AgentMemoryStore   = agentmemory.AgentMemoryStore
+	AgentMemoryConfig  = agentmemory.AgentMemoryConfig
+	SessionErrorRecord = agentmemory.SessionErrorRecord
 )
 
 var (
@@ -15,4 +15,3 @@ var (
 	NewAgentMemoryUsecase      = agentmemory.NewAgentMemoryUsecase
 	BootstrapUserMemoryIfEmpty = agentmemory.BootstrapUserMemoryIfEmpty
 )
-

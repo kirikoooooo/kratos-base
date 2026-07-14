@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"kratos-demo/internal/biz"
+	"kratos-demo/internal/consts/public"
 	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 	datatrace "kratos-demo/internal/data/trace"
 )
@@ -34,7 +34,7 @@ func TestToolCatalogReadWriteAndCommandTools(t *testing.T) {
 	})
 
 	tools.root = dir
-	ctx := agentctx.WithAgent(agentctx.WithTaskID(context.Background(), "tool-task"), biz.AgentKindDefault)
+	ctx := agentctx.WithAgent(agentctx.WithTaskID(context.Background(), "tool-task"), public.AgentKindDefault)
 
 	writeInput, _ := json.Marshal(map[string]any{
 		"path":    "notes/demo.txt",
@@ -121,7 +121,7 @@ func TestReadFileReturnsDirectoryListing(t *testing.T) {
 	}
 
 	tools.root = dir
-	ctx := agentctx.WithAgent(agentctx.WithTaskID(context.Background(), "tool-dir-task"), biz.AgentKindDefault)
+	ctx := agentctx.WithAgent(agentctx.WithTaskID(context.Background(), "tool-dir-task"), public.AgentKindDefault)
 
 	output, err := tools.readFile(ctx, `{"path":"configs","start":1,"end":10}`)
 	if err != nil {

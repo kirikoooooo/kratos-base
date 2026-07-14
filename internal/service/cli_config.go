@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"kratos-demo/internal/conf"
+	"kratos-demo/internal/consts/public"
 )
 
 func (c *CLIService) BindAIConfig(ai *conf.AI) {
@@ -146,7 +147,7 @@ func (c *CLIService) printAIConfigStatus() {
 	maskedKey := "(未设置)"
 	baseURL := ""
 	switch effectiveProvider(c.aiConfig) {
-	case ProviderDeepSeek:
+	case public.ProviderDeepSeek:
 		if c.aiConfig.Deepseek != nil {
 			maskedKey = maskCLIAPIKey(c.aiConfig.Deepseek.GetApiKey())
 			baseURL = strings.TrimSpace(c.aiConfig.Deepseek.GetBaseUrl())
@@ -206,7 +207,7 @@ type modelEntry struct {
 // availableModels 返回当前 provider 可选的模型列表。
 func availableModels(ai *conf.AI) []modelEntry {
 	switch effectiveProvider(ai) {
-	case ProviderDeepSeek:
+	case public.ProviderDeepSeek:
 		return []modelEntry{
 			{Name: "deepseek-v4-flash", Desc: "V4 Flash · 极速响应"},
 			{Name: "deepseek-v4-pro", Desc: "V4 Pro · 最强推理"},
@@ -228,7 +229,7 @@ func currentModel(ai *conf.AI) string {
 		return ""
 	}
 	switch effectiveProvider(ai) {
-	case ProviderDeepSeek:
+	case public.ProviderDeepSeek:
 		if ai.Deepseek != nil {
 			m := strings.TrimSpace(ai.Deepseek.GetModel())
 			if m == "" {
@@ -254,7 +255,7 @@ func setModel(ai *conf.AI, model string) {
 		return
 	}
 	switch effectiveProvider(ai) {
-	case ProviderDeepSeek:
+	case public.ProviderDeepSeek:
 		if ai.Deepseek == nil {
 			ai.Deepseek = &conf.AI_DeepSeek{}
 		}

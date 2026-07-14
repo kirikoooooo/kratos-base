@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	taskv1 "kratos-demo/api/task/v1"
-	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
+	"kratos-demo/internal/consts/public"
 
 	"github.com/go-kratos/kratos/v2/log"
 )
@@ -17,15 +17,15 @@ func TestAgentRuntimeSupportsGenericDefaultProfile(t *testing.T) {
 
 	tests := []struct {
 		name  string
-		agent biz.AgentKind
+		agent public.AgentKind
 		want  bool
 	}{
-		{name: "default profile", agent: biz.AgentKindDefault, want: true},
-		{name: "generic alias", agent: biz.AgentKindGeneric, want: true},
-		{name: "router compatibility", agent: biz.AgentKindRouter, want: true},
-		{name: "coder compatibility", agent: biz.AgentKindCoder, want: true},
-		{name: "reviewer compatibility", agent: biz.AgentKindReviewer, want: true},
-		{name: "unknown profile", agent: biz.AgentKind("planner"), want: false},
+		{name: "default profile", agent: public.AgentKindDefault, want: true},
+		{name: "generic alias", agent: public.AgentKindGeneric, want: true},
+		{name: "router compatibility", agent: public.AgentKindRouter, want: true},
+		{name: "coder compatibility", agent: public.AgentKindCoder, want: true},
+		{name: "reviewer compatibility", agent: public.AgentKindReviewer, want: true},
+		{name: "unknown profile", agent: public.AgentKind("planner"), want: false},
 	}
 
 	for _, tt := range tests {
@@ -44,7 +44,7 @@ func TestAgentRuntimeReceiveTaskAcceptsDefaultProfile(t *testing.T) {
 
 	result, err := runtime.ReceiveTask(context.Background(), &taskv1.TaskCommand{
 		TaskID: "task-default-profile",
-		Agent:  string(biz.AgentKindDefault),
+		Agent:  string(public.AgentKindDefault),
 		Prompt: "???????????",
 	})
 
@@ -67,7 +67,7 @@ func TestFakeProviderCreatesLLM(t *testing.T) {
 
 	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, nil, nil, nil, log.NewStdLogger(io.Discard))
 
-	result, err := runtime.Execute(context.Background(), biz.AgentKindReviewer, "请审查代码")
+	result, err := runtime.Execute(context.Background(), public.AgentKindReviewer, "请审查代码")
 
 	if err != nil {
 		t.Fatalf("Execute() error = %v", err)

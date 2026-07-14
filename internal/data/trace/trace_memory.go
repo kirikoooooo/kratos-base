@@ -7,7 +7,7 @@ import (
 	"time"
 
 	taskv1 "kratos-demo/api/task/v1"
-	"kratos-demo/internal/biz"
+	"kratos-demo/internal/consts/public"
 )
 
 const maxTraceSessions = 32
@@ -27,7 +27,7 @@ func NewDelegationTraceStore() DelegationTraceStore {
 	}
 }
 
-func (s *memoryTraceStore) StartTask(taskID string, agent biz.AgentKind, status string) {
+func (s *memoryTraceStore) StartTask(taskID string, agent public.AgentKind, status string) {
 	if strings.TrimSpace(taskID) == "" {
 		return
 	}

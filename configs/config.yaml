@@ -31,6 +31,16 @@ ai:
     model: deepseek-v4-flash
     timeout_seconds: 180
 runtime:
+
+  # 使用 remote_service/mcp-server-milvus 中的官方源码和嵌入式 Milvus Lite。
+  mcp_servers:
+    - name: milvus
+      command: uv
+      args: ["--directory", "remote_service/mcp-server-milvus", "run", "src/mcp_server_milvus/server.py", "--milvus-uri", ".myagent/milvus.db"]
+      timeout_seconds: 30
+      env:
+        - key: UV_CACHE_DIR
+          value: .myagent/uv-cache
   remotes:
     - agent: coder
       target: 127.0.0.1:9001

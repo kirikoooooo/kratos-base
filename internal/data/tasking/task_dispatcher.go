@@ -7,11 +7,14 @@ import (
 
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
+	errconst "kratos-demo/internal/consts/error"
+	"kratos-demo/internal/consts/public"
 	actorpkg "kratos-demo/third_party/actor"
 
-	"github.com/go-kratos/kratos/v2/log"
 	dataagent "kratos-demo/internal/data/agent_runtime"
 	datatrace "kratos-demo/internal/data/trace"
+
+	"github.com/go-kratos/kratos/v2/log"
 )
 
 const runtimeMailboxSize = 128
@@ -47,10 +50,10 @@ func (d *taskDispatcher) Dispatch(ctx context.Context, task *Task) error {
 	}
 	cmd := taskToCommand(task)
 	if d.runtime == nil {
-		return fmt.Errorf("%w: runtime is nil", dataagent.ErrAgentNotSupported)
+		return fmt.Errorf("%w: runtime is nil", errconst.ErrAgentNotSupported)
 	}
-	if !d.runtime.Supports(biz.AgentKind(cmd.Agent)) {
-		return fmt.Errorf("%w: %s", dataagent.ErrAgentNotSupported, cmd.Agent)
+	if !d.runtime.Supports(public.AgentKind(cmd.Agent)) {
+		return fmt.Errorf("%w: %s", errconst.ErrAgentNotSupported, cmd.Agent)
 	}
 
 	go d.handle(context.WithoutCancel(ctx), cmd)

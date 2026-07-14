@@ -3,6 +3,8 @@ package biz
 import (
 	bizagent "kratos-demo/internal/biz/agent"
 	bizagentruntime "kratos-demo/internal/biz/agent_runtime"
+	errconst "kratos-demo/internal/consts/error"
+	"kratos-demo/internal/consts/public"
 
 	"github.com/google/wire"
 )
@@ -13,34 +15,22 @@ type (
 	AgentRuntimeUsecase = bizagent.AgentRuntimeUsecase // = Agent
 )
 
-// Re-export AgentRuntime port types from biz/agent_runtime.
+// Re-export AgentRuntime port types from biz/agent_runtime + consts/public.
 type (
-	AgentKind          = bizagentruntime.AgentKind
+	AgentKind          = public.AgentKind
 	AgentRuntime       = bizagentruntime.AgentRuntime
 	DelegationVerifier = bizagentruntime.DelegationVerifier
 )
 
+// Re-export sentinel errors from consts/error.
 var (
-	// AgentKind constants.
-	AgentKindDefault  = bizagentruntime.AgentKindDefault
-	AgentKindGeneric  = bizagentruntime.AgentKindGeneric
-	AgentKindRouter   = bizagentruntime.AgentKindRouter
-	AgentKindCoder    = bizagentruntime.AgentKindCoder
-	AgentKindReviewer = bizagentruntime.AgentKindReviewer
+	ErrAgentRuntimeUnavailable = errconst.ErrAgentRuntimeUnavailable
+	ErrAgentNotSupported       = errconst.ErrAgentNotSupported
+	ErrDelegationNotSupported  = errconst.ErrDelegationNotSupported
+)
 
-	// Deprecated: use AgentKind constants.
-	AgentDefault  = bizagentruntime.AgentKindDefault
-	AgentGeneric  = bizagentruntime.AgentKindGeneric
-	AgentRouter   = bizagentruntime.AgentKindRouter
-	AgentCoder    = bizagentruntime.AgentKindCoder
-	AgentReviewer = bizagentruntime.AgentKindReviewer
-
-	// Error sentinels.
-	ErrAgentRuntimeUnavailable = bizagentruntime.ErrAgentRuntimeUnavailable
-	ErrAgentNotSupported       = bizagentruntime.ErrAgentNotSupported
-	ErrDelegationNotSupported  = bizagentruntime.ErrDelegationNotSupported
-
-	// Constructors.
+// Constructors.
+var (
 	NewAgent               = bizagent.NewAgent
 	NewAgentRuntimeUsecase = bizagent.NewAgentRuntimeUsecase
 )

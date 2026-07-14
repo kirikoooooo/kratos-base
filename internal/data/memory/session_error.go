@@ -1,11 +1,12 @@
 package memory
+
 import (
 	"fmt"
 	"path/filepath"
 	"strings"
 	"time"
-
 )
+
 const (
 	maxSessionErrorMessage       = 2000
 	maxSessionErrorDetail        = 4000

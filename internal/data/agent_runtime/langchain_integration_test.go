@@ -12,6 +12,7 @@ import (
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
+	"kratos-demo/internal/consts/public"
 	datatrace "kratos-demo/internal/data/trace"
 	actorpkg "kratos-demo/third_party/actor"
 	toolcatalog "kratos-demo/third_party/tools"
@@ -273,7 +274,7 @@ func TestAgentRuntimeSendTaskViaActor(t *testing.T) {
 
 	result, err := runtime.SendTask(context.Background(), &taskv1.TaskCommand{
 		TaskID: "task-sync",
-		Agent:  string(biz.AgentKindCoder),
+		Agent:  string(public.AgentKindCoder),
 		Prompt: "implement a minimal example",
 	})
 	if err != nil {
@@ -317,13 +318,13 @@ func TestDispatchSubTaskViaRemoteGRPC(t *testing.T) {
 
 	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{
 		Remotes: []*conf.Runtime_RemoteAgent{{
-			Agent:   string(biz.AgentKindCoder),
+			Agent:   string(public.AgentKindCoder),
 			Target:  listener.Addr().String(),
 			Timeout: 3,
 		}},
 	}, trace, nil, nil, logger)
 
-	result, err := runtime.(*langChainAgentRuntime).dispatchSubTask(context.Background(), biz.AgentKindCoder, "remote implement a minimal endpoint")
+	result, err := runtime.(*langChainAgentRuntime).dispatchSubTask(context.Background(), public.AgentKindCoder, "remote implement a minimal endpoint")
 	if err != nil {
 		t.Fatalf("dispatch remote grpc sub task failed: %v", err)
 	}

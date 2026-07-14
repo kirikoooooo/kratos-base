@@ -5,15 +5,15 @@ import (
 	"time"
 
 	taskv1 "kratos-demo/api/task/v1"
-	"kratos-demo/internal/biz"
+	"kratos-demo/internal/consts/public"
 	"kratos-demo/internal/data/common"
 )
 
-func agentName(agent biz.AgentKind) string {
+func agentName(agent public.AgentKind) string {
 	return string(agent)
 }
 
-func isEmptyAgent(agent biz.AgentKind) bool {
+func isEmptyAgent(agent public.AgentKind) bool {
 	return strings.TrimSpace(agentName(agent)) == ""
 }
 

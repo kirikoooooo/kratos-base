@@ -1,4 +1,5 @@
 package memory
+
 import (
 	"bufio"
 	"bytes"
@@ -13,7 +14,7 @@ import (
 	"time"
 
 	"kratos-demo/internal/conf"
-	"kratos-demo/internal/data/common"
+	"kratos-demo/internal/consts/public"
 
 	"github.com/go-kratos/kratos/v2/log"
 )
@@ -31,8 +32,8 @@ func NewFileAgentMemoryStore(dataConf *conf.Data, logger log.Logger) (AgentMemor
 		return nil, fmt.Errorf("resolve workspace root: %w", err)
 	}
 
-	dir := common.DefaultMemoryDir
-	userID := common.DefaultMemoryUserID
+	dir := public.DefaultMemoryDir
+	userID := public.DefaultMemoryUserID
 	if dataConf != nil && dataConf.GetAgentMemory() != nil {
 		if configured := strings.TrimSpace(dataConf.GetAgentMemory().GetDir()); configured != "" {
 			dir = configured
@@ -57,8 +58,8 @@ func NewFileAgentMemoryStore(dataConf *conf.Data, logger log.Logger) (AgentMemor
 }
 
 func NewFileAgentMemoryConfig(dataConf *conf.Data) AgentMemoryConfig {
-	dir := common.DefaultMemoryDir
-	userID := common.DefaultMemoryUserID
+	dir := public.DefaultMemoryDir
+	userID := public.DefaultMemoryUserID
 	threshold := 0
 	keepRecent := 0
 	toolOutputMax := 0

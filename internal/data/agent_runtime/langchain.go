@@ -1,4 +1,4 @@
-﻿package agent
+package agent
 
 import (
 	"context"
@@ -11,13 +11,15 @@ import (
 	taskv1 "kratos-demo/api/task/v1"
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
-	"kratos-demo/internal/data/common"
+	"kratos-demo/internal/consts/public"
 	agentcontext "kratos-demo/internal/data/agent_runtime/context"
 	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
+	"kratos-demo/internal/data/common"
+	"kratos-demo/internal/data/mcp"
 	agentmemory "kratos-demo/internal/data/memory"
 	"kratos-demo/internal/data/provider"
-	agenttool "kratos-demo/internal/data/tool"
 	datasession "kratos-demo/internal/data/session"
+	agenttool "kratos-demo/internal/data/tool"
 	datatrace "kratos-demo/internal/data/trace"
 	actorpkg "kratos-demo/third_party/actor"
 	toolcatalog "kratos-demo/third_party/tools"
@@ -58,6 +60,8 @@ type langChainAgentRuntime struct {
 	localToolsErr  error
 	toolCatalog    *toolcatalog.Catalog
 	toolCatalogErr error
+	mcpClients     []*mcp.Client
+	mcpTools       []llms.Tool
 }
 
 func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatrace.DelegationTraceStore, sessions datasession.SessionStore, memory agentmemory.AgentMemory, logger log.Logger) biz.AgentRuntime {
@@ -70,7 +74,7 @@ func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatra
 	if localToolsErr != nil {
 		helper.Warnf("create local tool runtime failed: %v", localToolsErr)
 	}
-	return &langChainAgentRuntime{
+	runtime := &langChainAgentRuntime{
 		config:         config,
 		runtimeConfig:  runtimeConfig,
 		log:            helper,
@@ -83,6 +87,16 @@ func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatra
 		toolCatalog:    catalog,
 		toolCatalogErr: err,
 	}
+	if runtimeConfig != nil {
+		clients, tools, mcpErr := mcp.NewClients(context.Background(), runtimeConfig.GetMcpServers())
+		if mcpErr != nil {
+			helper.Warnf("connect MCP servers failed: %v", mcpErr)
+		} else {
+			runtime.mcpClients = clients
+			runtime.mcpTools = tools
+		}
+	}
+	return runtime
 }
 
 func (r *langChainAgentRuntime) PID() actorpkg.PID {
@@ -105,6 +119,9 @@ func (r *langChainAgentRuntime) Process(msg *actorpkg.Message) {
 }
 
 func (r *langChainAgentRuntime) OnStop() {
+	for _, client := range r.mcpClients {
+		client.Close()
+	}
 	r.log.Infof("agent runtime stopped: %s", r.Name())
 }
 
@@ -112,16 +129,16 @@ func (r *langChainAgentRuntime) Name() string {
 	return "langchaingo-openai-runtime"
 }
 
-func (r *langChainAgentRuntime) Supports(agent biz.AgentKind) bool {
+func (r *langChainAgentRuntime) Supports(agent public.AgentKind) bool {
 	switch agent {
-	case biz.AgentKindDefault, biz.AgentKindGeneric, biz.AgentKindRouter, biz.AgentKindCoder, biz.AgentKindReviewer:
+	case public.AgentKindDefault, public.AgentKindGeneric, public.AgentKindRouter, public.AgentKindCoder, public.AgentKindReviewer:
 		return true
 	default:
 		return false
 	}
 }
 
-func (r *langChainAgentRuntime) Execute(ctx context.Context, agent biz.AgentKind, prompt string) (*taskv1.TaskResult, error) {
+func (r *langChainAgentRuntime) Execute(ctx context.Context, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	normalized := normalizeRuntimeAgent(agent)
 	ctx = agentctx.WithAgent(ctx, normalized)
 	if r.memory != nil {
@@ -132,13 +149,13 @@ func (r *langChainAgentRuntime) Execute(ctx context.Context, agent biz.AgentKind
 		}
 	}
 	switch normalized {
-	case biz.AgentKindDefault:
+	case public.AgentKindDefault:
 		return r.runDefault(ctx, prompt)
-	case biz.AgentKindRouter:
+	case public.AgentKindRouter:
 		return r.runRouter(ctx, prompt)
-	case biz.AgentKindCoder:
+	case public.AgentKindCoder:
 		return r.runCoder(ctx, prompt)
-	case biz.AgentKindReviewer:
+	case public.AgentKindReviewer:
 		return r.runReviewer(ctx, prompt)
 	default:
 		return nil, fmt.Errorf("%w: %s", ErrAgentNotSupported, agent)
@@ -149,7 +166,7 @@ func (r *langChainAgentRuntime) ReceiveTask(ctx context.Context, cmd *taskv1.Tas
 	if cmd == nil {
 		return nil, errors.New("task command is nil")
 	}
-	return r.Execute(agentctx.WithTaskID(ctx, cmd.TaskID), normalizeRuntimeAgent(biz.AgentKind(cmd.Agent)), cmd.Prompt)
+	return r.Execute(agentctx.WithTaskID(ctx, cmd.TaskID), normalizeRuntimeAgent(public.AgentKind(cmd.Agent)), cmd.Prompt)
 }
 
 func (r *langChainAgentRuntime) SendTask(_ context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
@@ -205,14 +222,14 @@ func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*
 
 	bindings := []toolcatalog.BindingSpec{
 		{Name: "coder_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
-			result, err := r.dispatchSubTask(toolCtx, biz.AgentKindCoder, input)
+			result, err := r.dispatchSubTask(toolCtx, public.AgentKindCoder, input)
 			if err != nil {
 				return "", err
 			}
 			return formatTaskResult("CoderAgent", result), nil
 		}},
 		{Name: "reviewer_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
-			result, err := r.dispatchSubTask(toolCtx, biz.AgentKindReviewer, input)
+			result, err := r.dispatchSubTask(toolCtx, public.AgentKindReviewer, input)
 			if err != nil {
 				return "", err
 			}
@@ -266,14 +283,14 @@ func (r *langChainAgentRuntime) runCoder(ctx context.Context, prompt string) (*t
 
 	bindings := []toolcatalog.BindingSpec{
 		{Name: "router_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
-			result, err := r.dispatchSubTask(toolCtx, biz.AgentKindRouter, input)
+			result, err := r.dispatchSubTask(toolCtx, public.AgentKindRouter, input)
 			if err != nil {
 				return "", err
 			}
 			return formatTaskResult("RouterAgent", result), nil
 		}},
 		{Name: "reviewer_agent", Handler: func(toolCtx context.Context, input string) (string, error) {
-			result, err := r.dispatchSubTask(toolCtx, biz.AgentKindReviewer, input)
+			result, err := r.dispatchSubTask(toolCtx, public.AgentKindReviewer, input)
 			if err != nil {
 				return "", err
 			}
@@ -298,12 +315,12 @@ func (r *langChainAgentRuntime) runCoder(ctx context.Context, prompt string) (*t
 	return r.runToolCallingLoop(ctx, modelClient, toolset, systemPrompt, prompt, "coder agent 已通过本地 tool calling 完成生成")
 }
 
-func normalizeRuntimeAgent(agent biz.AgentKind) biz.AgentKind {
-	switch biz.AgentKind(strings.TrimSpace(strings.ToLower(string(agent)))) {
-	case "", biz.AgentKindDefault, biz.AgentKindGeneric:
-		return biz.AgentKindDefault
+func normalizeRuntimeAgent(agent public.AgentKind) public.AgentKind {
+	switch public.AgentKind(strings.TrimSpace(strings.ToLower(string(agent)))) {
+	case "", public.AgentKindDefault, public.AgentKindGeneric:
+		return public.AgentKindDefault
 	default:
-		return biz.AgentKind(strings.TrimSpace(strings.ToLower(string(agent))))
+		return public.AgentKind(strings.TrimSpace(strings.ToLower(string(agent))))
 	}
 }
 
@@ -365,6 +382,7 @@ func (r *langChainAgentRuntime) buildManagedToolset(bindings []toolcatalog.Bindi
 	if r.localTools != nil {
 		bindings = append(bindings, r.localTools.Bindings()...)
 	}
+	tools := make([]llms.Tool, 0, len(bindings)+len(r.mcpTools))
 	names := make([]string, 0, len(bindings))
 	handlers := make(map[string]toolcatalog.Handler, len(bindings))
 	for _, binding := range bindings {
@@ -378,9 +396,27 @@ func (r *langChainAgentRuntime) buildManagedToolset(bindings []toolcatalog.Bindi
 		names = append(names, name)
 		handlers[name] = binding.Handler
 	}
-	tools, err := r.toolCatalog.AsLLMTools(names)
+	localToolDefs, err := r.toolCatalog.AsLLMTools(names)
 	if err != nil {
 		return nil, err
+	}
+	tools = append(tools, localToolDefs...)
+	for _, client := range r.mcpClients {
+		for _, tool := range client.Tools() {
+			if tool.Function == nil {
+				continue
+			}
+			name := strings.TrimSpace(tool.Function.Name)
+			if _, exists := handlers[name]; exists {
+				return nil, fmt.Errorf("duplicate MCP tool name: %s", name)
+			}
+			mcpClient := client
+			toolName := name
+			handlers[name] = func(ctx context.Context, input string) (string, error) {
+				return mcpClient.Call(ctx, toolName, input)
+			}
+			tools = append(tools, tool)
+		}
 	}
 	return &managedToolset{
 		Tools:    tools,
@@ -968,7 +1004,7 @@ func (r *langChainAgentRuntime) runPlainLLMTask(ctx context.Context, systemPromp
 	}, nil
 }
 
-func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.AgentKind, prompt string) (*taskv1.TaskResult, error) {
+func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	cmd := &taskv1.TaskCommand{
 		Agent:  string(agent),
 		Prompt: strings.TrimSpace(prompt),
@@ -983,7 +1019,7 @@ func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.A
 			r.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:          time.Now(),
 				TaskID:        agentctx.TaskID(ctx),
-				Agent:         string(biz.AgentKindRouter),
+				Agent:         string(public.AgentKindRouter),
 				Stage:         "delegate_remote",
 				Mode:          string(agent),
 				Target:        remote.GetTarget(),
@@ -997,7 +1033,7 @@ func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.A
 		r.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:          time.Now(),
 			TaskID:        agentctx.TaskID(ctx),
-			Agent:         string(biz.AgentKindRouter),
+			Agent:         string(public.AgentKindRouter),
 			Stage:         "delegate_local",
 			Mode:          string(agent),
 			PromptPreview: common.PreviewPrompt(prompt),
@@ -1006,7 +1042,7 @@ func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent biz.A
 	return r.ReceiveTask(ctx, cmd)
 }
 
-func (r *langChainAgentRuntime) lookupRemoteAgent(agent biz.AgentKind) *conf.Runtime_RemoteAgent {
+func (r *langChainAgentRuntime) lookupRemoteAgent(agent public.AgentKind) *conf.Runtime_RemoteAgent {
 	if r == nil || r.runtimeConfig == nil {
 		return nil
 	}
@@ -1057,7 +1093,7 @@ func (r *langChainAgentRuntime) executeRemoteTask(ctx context.Context, remote *c
 			r.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:   time.Now(),
 				TaskID: agentctx.TaskID(ctx),
-				Agent:  string(biz.AgentKindRouter),
+				Agent:  string(public.AgentKindRouter),
 				Stage:  "remote_execute_failed",
 				Target: target,
 				Error:  err.Error(),
@@ -1070,7 +1106,7 @@ func (r *langChainAgentRuntime) executeRemoteTask(ctx context.Context, remote *c
 		r.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:       time.Now(),
 			TaskID:     agentctx.TaskID(ctx),
-			Agent:      string(biz.AgentKindRouter),
+			Agent:      string(public.AgentKindRouter),
 			Stage:      "remote_execute_done",
 			Target:     target,
 			Mode:       cmd.GetAgent(),
@@ -1097,7 +1133,7 @@ func formatTaskResult(agentName string, result *taskv1.TaskResult) string {
 	return strings.Join(parts, "\n")
 }
 
-func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID string, agent biz.AgentKind, prompt string) (*taskv1.TaskResult, error) {
+func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID string, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		prompt = "请验证 router -> " + string(agent) + " 的委派链路"
@@ -1106,16 +1142,16 @@ func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID str
 		taskID = fmt.Sprintf("verify-%d", time.Now().UnixNano())
 	}
 	if r.memory != nil {
-		if err := r.memory.StartConversation(ctx, taskID, biz.AgentKindRouter, prompt); err != nil {
+		if err := r.memory.StartConversation(ctx, taskID, public.AgentKindRouter, prompt); err != nil {
 			return nil, fmt.Errorf("start conversation memory: %w", err)
 		}
 	}
 	if r.trace != nil {
-		r.trace.StartTask(taskID, biz.AgentKindRouter, "running")
+		r.trace.StartTask(taskID, public.AgentKindRouter, "running")
 		r.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:          time.Now(),
 			TaskID:        taskID,
-			Agent:         string(biz.AgentKindRouter),
+			Agent:         string(public.AgentKindRouter),
 			Stage:         "verification_start",
 			Mode:          string(agent),
 			PromptPreview: common.PreviewPrompt(prompt),
@@ -1127,7 +1163,7 @@ func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID str
 			r.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:   time.Now(),
 				TaskID: taskID,
-				Agent:  string(biz.AgentKindRouter),
+				Agent:  string(public.AgentKindRouter),
 				Stage:  "verification_failed",
 				Mode:   string(agent),
 				Error:  err.Error(),
@@ -1137,7 +1173,7 @@ func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID str
 			r.trace.AppendEvent(datatrace.DelegationEvent{
 				Time:       time.Now(),
 				TaskID:     taskID,
-				Agent:      string(biz.AgentKindRouter),
+				Agent:      string(public.AgentKindRouter),
 				Stage:      "verification_done",
 				Mode:       string(agent),
 				Summary:    result.GetSummary(),

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Local RAG Search"
+  short_description: "Use Milvus Lite MCP tools for local RAG"
+  default_prompt: "Use $rag-search to index and search the local project knowledge base."
