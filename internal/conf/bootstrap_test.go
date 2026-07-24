@@ -56,4 +56,9 @@ func TestEnsureConfigPathEmptyUsesWorkingDirectory(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(want, "config.yaml")); err != nil {
 		t.Fatalf("config.yaml missing: %v", err)
 	}
+	for _, name := range []string{"model.conf", "policy.csv"} {
+		if _, err := os.Stat(filepath.Join(want, "casbin", name)); err != nil {
+			t.Fatalf("Casbin %s missing: %v", name, err)
+		}
+	}
 }

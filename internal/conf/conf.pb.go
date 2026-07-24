@@ -27,6 +27,8 @@ type Bootstrap struct {
 	Data          *Data                  `protobuf:"bytes,2,opt,name=data,proto3" json:"data,omitempty"`
 	Ai            *AI                    `protobuf:"bytes,3,opt,name=ai,proto3" json:"ai,omitempty"`
 	Runtime       *Runtime               `protobuf:"bytes,4,opt,name=runtime,proto3" json:"runtime,omitempty"`
+	Observability *Observability         `protobuf:"bytes,5,opt,name=observability,proto3" json:"observability,omitempty"`
+	Security      *Security              `protobuf:"bytes,6,opt,name=security,proto3" json:"security,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -89,19 +91,171 @@ func (x *Bootstrap) GetRuntime() *Runtime {
 	return nil
 }
 
-type AI struct {
-	state    protoimpl.MessageState `protogen:"open.v1"`
-	Openai   *AI_OpenAI             `protobuf:"bytes,1,opt,name=openai,proto3" json:"openai,omitempty"`
-	Deepseek *AI_DeepSeek           `protobuf:"bytes,2,opt,name=deepseek,proto3" json:"deepseek,omitempty"`
-	// LLM 厂商：openai / deepseek。默认 openai
-	Provider      string `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
+func (x *Bootstrap) GetObservability() *Observability {
+	if x != nil {
+		return x.Observability
+	}
+	return nil
+}
+
+func (x *Bootstrap) GetSecurity() *Security {
+	if x != nil {
+		return x.Security
+	}
+	return nil
+}
+
+type Security struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Disabled only for explicit local development. Enabled policies deny by default.
+	Enabled        bool                  `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	LocalPrincipal string                `protobuf:"bytes,2,opt,name=local_principal,json=localPrincipal,proto3" json:"local_principal,omitempty"`
+	Principals     []*Security_Principal `protobuf:"bytes,3,rep,name=principals,proto3" json:"principals,omitempty"`
+	Roles          []*Security_Role      `protobuf:"bytes,4,rep,name=roles,proto3" json:"roles,omitempty"`
+	// Casbin model and policy files, resolved relative to the config directory.
+	CasbinModelFile  string `protobuf:"bytes,5,opt,name=casbin_model_file,json=casbinModelFile,proto3" json:"casbin_model_file,omitempty"`
+	CasbinPolicyFile string `protobuf:"bytes,6,opt,name=casbin_policy_file,json=casbinPolicyFile,proto3" json:"casbin_policy_file,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *Security) Reset() {
+	*x = Security{}
+	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Security) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Security) ProtoMessage() {}
+
+func (x *Security) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Security.ProtoReflect.Descriptor instead.
+func (*Security) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *Security) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Security) GetLocalPrincipal() string {
+	if x != nil {
+		return x.LocalPrincipal
+	}
+	return ""
+}
+
+func (x *Security) GetPrincipals() []*Security_Principal {
+	if x != nil {
+		return x.Principals
+	}
+	return nil
+}
+
+func (x *Security) GetRoles() []*Security_Role {
+	if x != nil {
+		return x.Roles
+	}
+	return nil
+}
+
+func (x *Security) GetCasbinModelFile() string {
+	if x != nil {
+		return x.CasbinModelFile
+	}
+	return ""
+}
+
+func (x *Security) GetCasbinPolicyFile() string {
+	if x != nil {
+		return x.CasbinPolicyFile
+	}
+	return ""
+}
+
+type Observability struct {
+	state         protoimpl.MessageState  `protogen:"open.v1"`
+	Langfuse      *Observability_Langfuse `protobuf:"bytes,1,opt,name=langfuse,proto3" json:"langfuse,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
+func (x *Observability) Reset() {
+	*x = Observability{}
+	mi := &file_internal_conf_conf_proto_msgTypes[2]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Observability) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Observability) ProtoMessage() {}
+
+func (x *Observability) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[2]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Observability.ProtoReflect.Descriptor instead.
+func (*Observability) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Observability) GetLangfuse() *Observability_Langfuse {
+	if x != nil {
+		return x.Langfuse
+	}
+	return nil
+}
+
+type AI struct {
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	Openai   *AI_OpenAI             `protobuf:"bytes,1,opt,name=openai,proto3" json:"openai,omitempty"`
+	Deepseek *AI_DeepSeek           `protobuf:"bytes,2,opt,name=deepseek,proto3" json:"deepseek,omitempty"`
+	// LLM 厂商：openai / deepseek / gemini / grok / claude / openrouter。默认 openai。
+	Provider          string   `protobuf:"bytes,3,opt,name=provider,proto3" json:"provider,omitempty"`
+	FallbackProviders []string `protobuf:"bytes,4,rep,name=fallback_providers,json=fallbackProviders,proto3" json:"fallback_providers,omitempty"`
+	// Each provider gets max_retries + 1 attempts before trying the next fallback.
+	MaxRetries             int32          `protobuf:"varint,5,opt,name=max_retries,json=maxRetries,proto3" json:"max_retries,omitempty"`
+	RetryDelayMilliseconds int64          `protobuf:"varint,6,opt,name=retry_delay_milliseconds,json=retryDelayMilliseconds,proto3" json:"retry_delay_milliseconds,omitempty"`
+	Gemini                 *AI_Gemini     `protobuf:"bytes,7,opt,name=gemini,proto3" json:"gemini,omitempty"`
+	Grok                   *AI_Grok       `protobuf:"bytes,8,opt,name=grok,proto3" json:"grok,omitempty"`
+	Claude                 *AI_Claude     `protobuf:"bytes,9,opt,name=claude,proto3" json:"claude,omitempty"`
+	Openrouter             *AI_OpenRouter `protobuf:"bytes,10,opt,name=openrouter,proto3" json:"openrouter,omitempty"`
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
+}
+
 func (x *AI) Reset() {
 	*x = AI{}
-	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_internal_conf_conf_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -113,7 +267,7 @@ func (x *AI) String() string {
 func (*AI) ProtoMessage() {}
 
 func (x *AI) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[1]
+	mi := &file_internal_conf_conf_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -126,7 +280,7 @@ func (x *AI) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AI.ProtoReflect.Descriptor instead.
 func (*AI) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *AI) GetOpenai() *AI_OpenAI {
@@ -150,6 +304,55 @@ func (x *AI) GetProvider() string {
 	return ""
 }
 
+func (x *AI) GetFallbackProviders() []string {
+	if x != nil {
+		return x.FallbackProviders
+	}
+	return nil
+}
+
+func (x *AI) GetMaxRetries() int32 {
+	if x != nil {
+		return x.MaxRetries
+	}
+	return 0
+}
+
+func (x *AI) GetRetryDelayMilliseconds() int64 {
+	if x != nil {
+		return x.RetryDelayMilliseconds
+	}
+	return 0
+}
+
+func (x *AI) GetGemini() *AI_Gemini {
+	if x != nil {
+		return x.Gemini
+	}
+	return nil
+}
+
+func (x *AI) GetGrok() *AI_Grok {
+	if x != nil {
+		return x.Grok
+	}
+	return nil
+}
+
+func (x *AI) GetClaude() *AI_Claude {
+	if x != nil {
+		return x.Claude
+	}
+	return nil
+}
+
+func (x *AI) GetOpenrouter() *AI_OpenRouter {
+	if x != nil {
+		return x.Openrouter
+	}
+	return nil
+}
+
 type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Http          *Server_HTTP           `protobuf:"bytes,1,opt,name=http,proto3" json:"http,omitempty"`
@@ -160,7 +363,7 @@ type Server struct {
 
 func (x *Server) Reset() {
 	*x = Server{}
-	mi := &file_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_internal_conf_conf_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -172,7 +375,7 @@ func (x *Server) String() string {
 func (*Server) ProtoMessage() {}
 
 func (x *Server) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[2]
+	mi := &file_internal_conf_conf_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -185,7 +388,7 @@ func (x *Server) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server.ProtoReflect.Descriptor instead.
 func (*Server) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Server) GetHttp() *Server_HTTP {
@@ -212,7 +415,7 @@ type Data struct {
 
 func (x *Data) Reset() {
 	*x = Data{}
-	mi := &file_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_internal_conf_conf_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -224,7 +427,7 @@ func (x *Data) String() string {
 func (*Data) ProtoMessage() {}
 
 func (x *Data) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[3]
+	mi := &file_internal_conf_conf_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -237,7 +440,7 @@ func (x *Data) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data.ProtoReflect.Descriptor instead.
 func (*Data) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *Data) GetDatabase() *Data_Database {
@@ -258,13 +461,14 @@ type Runtime struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Remotes       []*Runtime_RemoteAgent `protobuf:"bytes,1,rep,name=remotes,proto3" json:"remotes,omitempty"`
 	McpServers    []*Runtime_MCPServer   `protobuf:"bytes,2,rep,name=mcp_servers,json=mcpServers,proto3" json:"mcp_servers,omitempty"`
+	Daytona       *Runtime_Daytona       `protobuf:"bytes,3,opt,name=daytona,proto3" json:"daytona,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Runtime) Reset() {
 	*x = Runtime{}
-	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_internal_conf_conf_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -276,7 +480,7 @@ func (x *Runtime) String() string {
 func (*Runtime) ProtoMessage() {}
 
 func (x *Runtime) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[4]
+	mi := &file_internal_conf_conf_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -289,7 +493,7 @@ func (x *Runtime) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Runtime.ProtoReflect.Descriptor instead.
 func (*Runtime) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Runtime) GetRemotes() []*Runtime_RemoteAgent {
@@ -306,6 +510,228 @@ func (x *Runtime) GetMcpServers() []*Runtime_MCPServer {
 	return nil
 }
 
+func (x *Runtime) GetDaytona() *Runtime_Daytona {
+	if x != nil {
+		return x.Daytona
+	}
+	return nil
+}
+
+type Security_Principal struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
+	Roles         []string               `protobuf:"bytes,2,rep,name=roles,proto3" json:"roles,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *Security_Principal) Reset() {
+	*x = Security_Principal{}
+	mi := &file_internal_conf_conf_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Security_Principal) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Security_Principal) ProtoMessage() {}
+
+func (x *Security_Principal) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Security_Principal.ProtoReflect.Descriptor instead.
+func (*Security_Principal) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1, 0}
+}
+
+func (x *Security_Principal) GetId() string {
+	if x != nil {
+		return x.Id
+	}
+	return ""
+}
+
+func (x *Security_Principal) GetRoles() []string {
+	if x != nil {
+		return x.Roles
+	}
+	return nil
+}
+
+type Security_Role struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Name             string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Permissions      []string               `protobuf:"bytes,2,rep,name=permissions,proto3" json:"permissions,omitempty"`
+	Paths            []string               `protobuf:"bytes,3,rep,name=paths,proto3" json:"paths,omitempty"`
+	CommandAllowlist []string               `protobuf:"bytes,4,rep,name=command_allowlist,json=commandAllowlist,proto3" json:"command_allowlist,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *Security_Role) Reset() {
+	*x = Security_Role{}
+	mi := &file_internal_conf_conf_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Security_Role) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Security_Role) ProtoMessage() {}
+
+func (x *Security_Role) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Security_Role.ProtoReflect.Descriptor instead.
+func (*Security_Role) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1, 1}
+}
+
+func (x *Security_Role) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *Security_Role) GetPermissions() []string {
+	if x != nil {
+		return x.Permissions
+	}
+	return nil
+}
+
+func (x *Security_Role) GetPaths() []string {
+	if x != nil {
+		return x.Paths
+	}
+	return nil
+}
+
+func (x *Security_Role) GetCommandAllowlist() []string {
+	if x != nil {
+		return x.CommandAllowlist
+	}
+	return nil
+}
+
+type Observability_Langfuse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Disabled or missing credentials leaves local tracing unchanged.
+	Enabled bool `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// Cloud default: https://cloud.langfuse.com. Self-hosted deployments use their API host.
+	Host string `protobuf:"bytes,2,opt,name=host,proto3" json:"host,omitempty"`
+	// Environment variable names; never put the actual keys in config files.
+	PublicKeyEnv        string `protobuf:"bytes,3,opt,name=public_key_env,json=publicKeyEnv,proto3" json:"public_key_env,omitempty"`
+	SecretKeyEnv        string `protobuf:"bytes,4,opt,name=secret_key_env,json=secretKeyEnv,proto3" json:"secret_key_env,omitempty"`
+	Environment         string `protobuf:"bytes,5,opt,name=environment,proto3" json:"environment,omitempty"`
+	Release             string `protobuf:"bytes,6,opt,name=release,proto3" json:"release,omitempty"`
+	FlushTimeoutSeconds int64  `protobuf:"varint,7,opt,name=flush_timeout_seconds,json=flushTimeoutSeconds,proto3" json:"flush_timeout_seconds,omitempty"`
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
+}
+
+func (x *Observability_Langfuse) Reset() {
+	*x = Observability_Langfuse{}
+	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Observability_Langfuse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Observability_Langfuse) ProtoMessage() {}
+
+func (x *Observability_Langfuse) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Observability_Langfuse.ProtoReflect.Descriptor instead.
+func (*Observability_Langfuse) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
+}
+
+func (x *Observability_Langfuse) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Observability_Langfuse) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *Observability_Langfuse) GetPublicKeyEnv() string {
+	if x != nil {
+		return x.PublicKeyEnv
+	}
+	return ""
+}
+
+func (x *Observability_Langfuse) GetSecretKeyEnv() string {
+	if x != nil {
+		return x.SecretKeyEnv
+	}
+	return ""
+}
+
+func (x *Observability_Langfuse) GetEnvironment() string {
+	if x != nil {
+		return x.Environment
+	}
+	return ""
+}
+
+func (x *Observability_Langfuse) GetRelease() string {
+	if x != nil {
+		return x.Release
+	}
+	return ""
+}
+
+func (x *Observability_Langfuse) GetFlushTimeoutSeconds() int64 {
+	if x != nil {
+		return x.FlushTimeoutSeconds
+	}
+	return 0
+}
+
 type AI_OpenAI struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	ApiKey  string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
@@ -319,7 +745,7 @@ type AI_OpenAI struct {
 
 func (x *AI_OpenAI) Reset() {
 	*x = AI_OpenAI{}
-	mi := &file_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_internal_conf_conf_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -331,7 +757,7 @@ func (x *AI_OpenAI) String() string {
 func (*AI_OpenAI) ProtoMessage() {}
 
 func (x *AI_OpenAI) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[5]
+	mi := &file_internal_conf_conf_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -344,7 +770,7 @@ func (x *AI_OpenAI) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AI_OpenAI.ProtoReflect.Descriptor instead.
 func (*AI_OpenAI) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1, 0}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 0}
 }
 
 func (x *AI_OpenAI) GetApiKey() string {
@@ -387,7 +813,7 @@ type AI_DeepSeek struct {
 
 func (x *AI_DeepSeek) Reset() {
 	*x = AI_DeepSeek{}
-	mi := &file_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_internal_conf_conf_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -399,7 +825,7 @@ func (x *AI_DeepSeek) String() string {
 func (*AI_DeepSeek) ProtoMessage() {}
 
 func (x *AI_DeepSeek) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[6]
+	mi := &file_internal_conf_conf_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -412,7 +838,7 @@ func (x *AI_DeepSeek) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AI_DeepSeek.ProtoReflect.Descriptor instead.
 func (*AI_DeepSeek) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{1, 1}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 1}
 }
 
 func (x *AI_DeepSeek) GetApiKey() string {
@@ -443,6 +869,279 @@ func (x *AI_DeepSeek) GetTimeoutSeconds() int64 {
 	return 0
 }
 
+// Gemini exposes an OpenAI-compatible endpoint; no Google-specific SDK is required.
+type AI_Gemini struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ApiKey         string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	BaseUrl        string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	Model          string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	TimeoutSeconds int64                  `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AI_Gemini) Reset() {
+	*x = AI_Gemini{}
+	mi := &file_internal_conf_conf_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AI_Gemini) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AI_Gemini) ProtoMessage() {}
+
+func (x *AI_Gemini) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AI_Gemini.ProtoReflect.Descriptor instead.
+func (*AI_Gemini) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 2}
+}
+
+func (x *AI_Gemini) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
+}
+
+func (x *AI_Gemini) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
+	}
+	return ""
+}
+
+func (x *AI_Gemini) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *AI_Gemini) GetTimeoutSeconds() int64 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+type AI_Grok struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ApiKey         string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	BaseUrl        string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	Model          string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	TimeoutSeconds int64                  `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AI_Grok) Reset() {
+	*x = AI_Grok{}
+	mi := &file_internal_conf_conf_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AI_Grok) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AI_Grok) ProtoMessage() {}
+
+func (x *AI_Grok) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AI_Grok.ProtoReflect.Descriptor instead.
+func (*AI_Grok) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 3}
+}
+
+func (x *AI_Grok) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
+}
+
+func (x *AI_Grok) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
+	}
+	return ""
+}
+
+func (x *AI_Grok) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *AI_Grok) GetTimeoutSeconds() int64 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+type AI_Claude struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ApiKey         string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	BaseUrl        string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	Model          string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	TimeoutSeconds int64                  `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AI_Claude) Reset() {
+	*x = AI_Claude{}
+	mi := &file_internal_conf_conf_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AI_Claude) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AI_Claude) ProtoMessage() {}
+
+func (x *AI_Claude) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AI_Claude.ProtoReflect.Descriptor instead.
+func (*AI_Claude) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 4}
+}
+
+func (x *AI_Claude) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
+}
+
+func (x *AI_Claude) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
+	}
+	return ""
+}
+
+func (x *AI_Claude) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *AI_Claude) GetTimeoutSeconds() int64 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
+type AI_OpenRouter struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ApiKey         string                 `protobuf:"bytes,1,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	BaseUrl        string                 `protobuf:"bytes,2,opt,name=base_url,json=baseUrl,proto3" json:"base_url,omitempty"`
+	Model          string                 `protobuf:"bytes,3,opt,name=model,proto3" json:"model,omitempty"`
+	TimeoutSeconds int64                  `protobuf:"varint,4,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *AI_OpenRouter) Reset() {
+	*x = AI_OpenRouter{}
+	mi := &file_internal_conf_conf_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AI_OpenRouter) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AI_OpenRouter) ProtoMessage() {}
+
+func (x *AI_OpenRouter) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AI_OpenRouter.ProtoReflect.Descriptor instead.
+func (*AI_OpenRouter) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 5}
+}
+
+func (x *AI_OpenRouter) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
+}
+
+func (x *AI_OpenRouter) GetBaseUrl() string {
+	if x != nil {
+		return x.BaseUrl
+	}
+	return ""
+}
+
+func (x *AI_OpenRouter) GetModel() string {
+	if x != nil {
+		return x.Model
+	}
+	return ""
+}
+
+func (x *AI_OpenRouter) GetTimeoutSeconds() int64 {
+	if x != nil {
+		return x.TimeoutSeconds
+	}
+	return 0
+}
+
 type Server_HTTP struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
@@ -454,7 +1153,7 @@ type Server_HTTP struct {
 
 func (x *Server_HTTP) Reset() {
 	*x = Server_HTTP{}
-	mi := &file_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_internal_conf_conf_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -466,7 +1165,7 @@ func (x *Server_HTTP) String() string {
 func (*Server_HTTP) ProtoMessage() {}
 
 func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[7]
+	mi := &file_internal_conf_conf_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -479,7 +1178,7 @@ func (x *Server_HTTP) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_HTTP.ProtoReflect.Descriptor instead.
 func (*Server_HTTP) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2, 0}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0}
 }
 
 func (x *Server_HTTP) GetNetwork() string {
@@ -514,7 +1213,7 @@ type Server_GRPC struct {
 
 func (x *Server_GRPC) Reset() {
 	*x = Server_GRPC{}
-	mi := &file_internal_conf_conf_proto_msgTypes[8]
+	mi := &file_internal_conf_conf_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +1225,7 @@ func (x *Server_GRPC) String() string {
 func (*Server_GRPC) ProtoMessage() {}
 
 func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[8]
+	mi := &file_internal_conf_conf_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +1238,7 @@ func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Server_GRPC.ProtoReflect.Descriptor instead.
 func (*Server_GRPC) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{2, 1}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 1}
 }
 
 func (x *Server_GRPC) GetNetwork() string {
@@ -573,7 +1272,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_internal_conf_conf_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -585,7 +1284,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[9]
+	mi := &file_internal_conf_conf_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -598,7 +1297,7 @@ func (x *Data_Database) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_Database.ProtoReflect.Descriptor instead.
 func (*Data_Database) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 0}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{5, 0}
 }
 
 func (x *Data_Database) GetDriver() string {
@@ -631,7 +1330,7 @@ type Data_AgentMemory struct {
 
 func (x *Data_AgentMemory) Reset() {
 	*x = Data_AgentMemory{}
-	mi := &file_internal_conf_conf_proto_msgTypes[10]
+	mi := &file_internal_conf_conf_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -643,7 +1342,7 @@ func (x *Data_AgentMemory) String() string {
 func (*Data_AgentMemory) ProtoMessage() {}
 
 func (x *Data_AgentMemory) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[10]
+	mi := &file_internal_conf_conf_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -656,7 +1355,7 @@ func (x *Data_AgentMemory) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Data_AgentMemory.ProtoReflect.Descriptor instead.
 func (*Data_AgentMemory) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{3, 1}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{5, 1}
 }
 
 func (x *Data_AgentMemory) GetDir() string {
@@ -694,6 +1393,94 @@ func (x *Data_AgentMemory) GetToolOutputMaxChars() int32 {
 	return 0
 }
 
+type Runtime_Daytona struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Disabled by default. When enabled, data analysis can run in a remote sandbox.
+	Enabled bool `protobuf:"varint,1,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// Environment variable containing the Daytona API key; never store the key in YAML.
+	ApiKeyEnv string `protobuf:"bytes,2,opt,name=api_key_env,json=apiKeyEnv,proto3" json:"api_key_env,omitempty"`
+	ApiUrl    string `protobuf:"bytes,3,opt,name=api_url,json=apiUrl,proto3" json:"api_url,omitempty"`
+	Target    string `protobuf:"bytes,4,opt,name=target,proto3" json:"target,omitempty"`
+	// Daytona snapshot with Python and plotting dependencies.
+	Snapshot string `protobuf:"bytes,5,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	// Sandbox lifetime; 0 asks Daytona to delete the sandbox immediately after it stops.
+	AutoDeleteMinutes int64 `protobuf:"varint,6,opt,name=auto_delete_minutes,json=autoDeleteMinutes,proto3" json:"auto_delete_minutes,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
+}
+
+func (x *Runtime_Daytona) Reset() {
+	*x = Runtime_Daytona{}
+	mi := &file_internal_conf_conf_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *Runtime_Daytona) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Runtime_Daytona) ProtoMessage() {}
+
+func (x *Runtime_Daytona) ProtoReflect() protoreflect.Message {
+	mi := &file_internal_conf_conf_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Runtime_Daytona.ProtoReflect.Descriptor instead.
+func (*Runtime_Daytona) Descriptor() ([]byte, []int) {
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{6, 0}
+}
+
+func (x *Runtime_Daytona) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *Runtime_Daytona) GetApiKeyEnv() string {
+	if x != nil {
+		return x.ApiKeyEnv
+	}
+	return ""
+}
+
+func (x *Runtime_Daytona) GetApiUrl() string {
+	if x != nil {
+		return x.ApiUrl
+	}
+	return ""
+}
+
+func (x *Runtime_Daytona) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *Runtime_Daytona) GetSnapshot() string {
+	if x != nil {
+		return x.Snapshot
+	}
+	return ""
+}
+
+func (x *Runtime_Daytona) GetAutoDeleteMinutes() int64 {
+	if x != nil {
+		return x.AutoDeleteMinutes
+	}
+	return 0
+}
+
 type Runtime_MCPServer struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// 唯一名称，仅用于日志和工具来源标识。
@@ -710,7 +1497,7 @@ type Runtime_MCPServer struct {
 
 func (x *Runtime_MCPServer) Reset() {
 	*x = Runtime_MCPServer{}
-	mi := &file_internal_conf_conf_proto_msgTypes[11]
+	mi := &file_internal_conf_conf_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -722,7 +1509,7 @@ func (x *Runtime_MCPServer) String() string {
 func (*Runtime_MCPServer) ProtoMessage() {}
 
 func (x *Runtime_MCPServer) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[11]
+	mi := &file_internal_conf_conf_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -735,7 +1522,7 @@ func (x *Runtime_MCPServer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Runtime_MCPServer.ProtoReflect.Descriptor instead.
 func (*Runtime_MCPServer) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{6, 1}
 }
 
 func (x *Runtime_MCPServer) GetName() string {
@@ -784,7 +1571,7 @@ type Runtime_RemoteAgent struct {
 
 func (x *Runtime_RemoteAgent) Reset() {
 	*x = Runtime_RemoteAgent{}
-	mi := &file_internal_conf_conf_proto_msgTypes[12]
+	mi := &file_internal_conf_conf_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -796,7 +1583,7 @@ func (x *Runtime_RemoteAgent) String() string {
 func (*Runtime_RemoteAgent) ProtoMessage() {}
 
 func (x *Runtime_RemoteAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[12]
+	mi := &file_internal_conf_conf_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -809,7 +1596,7 @@ func (x *Runtime_RemoteAgent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Runtime_RemoteAgent.ProtoReflect.Descriptor instead.
 func (*Runtime_RemoteAgent) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 1}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{6, 2}
 }
 
 func (x *Runtime_RemoteAgent) GetAgent() string {
@@ -843,7 +1630,7 @@ type Runtime_MCPServer_Environment struct {
 
 func (x *Runtime_MCPServer_Environment) Reset() {
 	*x = Runtime_MCPServer_Environment{}
-	mi := &file_internal_conf_conf_proto_msgTypes[13]
+	mi := &file_internal_conf_conf_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -855,7 +1642,7 @@ func (x *Runtime_MCPServer_Environment) String() string {
 func (*Runtime_MCPServer_Environment) ProtoMessage() {}
 
 func (x *Runtime_MCPServer_Environment) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[13]
+	mi := &file_internal_conf_conf_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -868,7 +1655,7 @@ func (x *Runtime_MCPServer_Environment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Runtime_MCPServer_Environment.ProtoReflect.Descriptor instead.
 func (*Runtime_MCPServer_Environment) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 0, 0}
+	return file_internal_conf_conf_proto_rawDescGZIP(), []int{6, 1, 0}
 }
 
 func (x *Runtime_MCPServer_Environment) GetKey() string {
@@ -890,22 +1677,83 @@ var File_internal_conf_conf_proto protoreflect.FileDescriptor
 const file_internal_conf_conf_proto_rawDesc = "" +
 	"\n" +
 	"\x18internal/conf/conf.proto\x12\n" +
-	"kratos.api\"\xac\x01\n" +
+	"kratos.api\"\x9f\x02\n" +
 	"\tBootstrap\x12*\n" +
 	"\x06server\x18\x01 \x01(\v2\x12.kratos.api.ServerR\x06server\x12$\n" +
 	"\x04data\x18\x02 \x01(\v2\x10.kratos.api.DataR\x04data\x12\x1e\n" +
 	"\x02ai\x18\x03 \x01(\v2\x0e.kratos.api.AIR\x02ai\x12-\n" +
-	"\aruntime\x18\x04 \x01(\v2\x13.kratos.api.RuntimeR\aruntime\"\x80\x03\n" +
+	"\aruntime\x18\x04 \x01(\v2\x13.kratos.api.RuntimeR\aruntime\x12?\n" +
+	"\robservability\x18\x05 \x01(\v2\x19.kratos.api.ObservabilityR\robservability\x120\n" +
+	"\bsecurity\x18\x06 \x01(\v2\x14.kratos.api.SecurityR\bsecurity\"\xcc\x03\n" +
+	"\bSecurity\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12'\n" +
+	"\x0flocal_principal\x18\x02 \x01(\tR\x0elocalPrincipal\x12>\n" +
+	"\n" +
+	"principals\x18\x03 \x03(\v2\x1e.kratos.api.Security.PrincipalR\n" +
+	"principals\x12/\n" +
+	"\x05roles\x18\x04 \x03(\v2\x19.kratos.api.Security.RoleR\x05roles\x12*\n" +
+	"\x11casbin_model_file\x18\x05 \x01(\tR\x0fcasbinModelFile\x12,\n" +
+	"\x12casbin_policy_file\x18\x06 \x01(\tR\x10casbinPolicyFile\x1a1\n" +
+	"\tPrincipal\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\x12\x14\n" +
+	"\x05roles\x18\x02 \x03(\tR\x05roles\x1a\x7f\n" +
+	"\x04Role\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12 \n" +
+	"\vpermissions\x18\x02 \x03(\tR\vpermissions\x12\x14\n" +
+	"\x05paths\x18\x03 \x03(\tR\x05paths\x12+\n" +
+	"\x11command_allowlist\x18\x04 \x03(\tR\x10commandAllowlist\"\xc6\x02\n" +
+	"\rObservability\x12>\n" +
+	"\blangfuse\x18\x01 \x01(\v2\".kratos.api.Observability.LangfuseR\blangfuse\x1a\xf4\x01\n" +
+	"\bLangfuse\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x12\n" +
+	"\x04host\x18\x02 \x01(\tR\x04host\x12$\n" +
+	"\x0epublic_key_env\x18\x03 \x01(\tR\fpublicKeyEnv\x12$\n" +
+	"\x0esecret_key_env\x18\x04 \x01(\tR\fsecretKeyEnv\x12 \n" +
+	"\venvironment\x18\x05 \x01(\tR\venvironment\x12\x18\n" +
+	"\arelease\x18\x06 \x01(\tR\arelease\x122\n" +
+	"\x15flush_timeout_seconds\x18\a \x01(\x03R\x13flushTimeoutSeconds\"\xc2\t\n" +
 	"\x02AI\x12-\n" +
 	"\x06openai\x18\x01 \x01(\v2\x15.kratos.api.AI.OpenAIR\x06openai\x123\n" +
 	"\bdeepseek\x18\x02 \x01(\v2\x17.kratos.api.AI.DeepSeekR\bdeepseek\x12\x1a\n" +
-	"\bprovider\x18\x03 \x01(\tR\bprovider\x1a{\n" +
+	"\bprovider\x18\x03 \x01(\tR\bprovider\x12-\n" +
+	"\x12fallback_providers\x18\x04 \x03(\tR\x11fallbackProviders\x12\x1f\n" +
+	"\vmax_retries\x18\x05 \x01(\x05R\n" +
+	"maxRetries\x128\n" +
+	"\x18retry_delay_milliseconds\x18\x06 \x01(\x03R\x16retryDelayMilliseconds\x12-\n" +
+	"\x06gemini\x18\a \x01(\v2\x15.kratos.api.AI.GeminiR\x06gemini\x12'\n" +
+	"\x04grok\x18\b \x01(\v2\x13.kratos.api.AI.GrokR\x04grok\x12-\n" +
+	"\x06claude\x18\t \x01(\v2\x15.kratos.api.AI.ClaudeR\x06claude\x129\n" +
+	"\n" +
+	"openrouter\x18\n" +
+	" \x01(\v2\x19.kratos.api.AI.OpenRouterR\n" +
+	"openrouter\x1a{\n" +
 	"\x06OpenAI\x12\x17\n" +
 	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
 	"\x05model\x18\x03 \x01(\tR\x05model\x12'\n" +
 	"\x0ftimeout_seconds\x18\x04 \x01(\x03R\x0etimeoutSeconds\x1a}\n" +
 	"\bDeepSeek\x12\x17\n" +
+	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x19\n" +
+	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12'\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x03R\x0etimeoutSeconds\x1a{\n" +
+	"\x06Gemini\x12\x17\n" +
+	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x19\n" +
+	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12'\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x03R\x0etimeoutSeconds\x1ay\n" +
+	"\x04Grok\x12\x17\n" +
+	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x19\n" +
+	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12'\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x03R\x0etimeoutSeconds\x1a{\n" +
+	"\x06Claude\x12\x17\n" +
+	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x19\n" +
+	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
+	"\x05model\x18\x03 \x01(\tR\x05model\x12'\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x03R\x0etimeoutSeconds\x1a\x7f\n" +
+	"\n" +
+	"OpenRouter\x12\x17\n" +
 	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
 	"\x05model\x18\x03 \x01(\tR\x05model\x12'\n" +
@@ -932,11 +1780,19 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12<\n" +
 	"\x1acontext_compress_threshold\x18\x03 \x01(\x03R\x18contextCompressThreshold\x12*\n" +
 	"\x11keep_recent_turns\x18\x04 \x01(\x05R\x0fkeepRecentTurns\x121\n" +
-	"\x15tool_output_max_chars\x18\x05 \x01(\x05R\x12toolOutputMaxChars\"\xc8\x03\n" +
+	"\x15tool_output_max_chars\x18\x05 \x01(\x05R\x12toolOutputMaxChars\"\xc2\x05\n" +
 	"\aRuntime\x129\n" +
 	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x12>\n" +
 	"\vmcp_servers\x18\x02 \x03(\v2\x1d.kratos.api.Runtime.MCPServerR\n" +
-	"mcpServers\x1a\xea\x01\n" +
+	"mcpServers\x125\n" +
+	"\adaytona\x18\x03 \x01(\v2\x1b.kratos.api.Runtime.DaytonaR\adaytona\x1a\xc0\x01\n" +
+	"\aDaytona\x12\x18\n" +
+	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1e\n" +
+	"\vapi_key_env\x18\x02 \x01(\tR\tapiKeyEnv\x12\x17\n" +
+	"\aapi_url\x18\x03 \x01(\tR\x06apiUrl\x12\x16\n" +
+	"\x06target\x18\x04 \x01(\tR\x06target\x12\x1a\n" +
+	"\bsnapshot\x18\x05 \x01(\tR\bsnapshot\x12.\n" +
+	"\x13auto_delete_minutes\x18\x06 \x01(\x03R\x11autoDeleteMinutes\x1a\xea\x01\n" +
 	"\tMCPServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +
@@ -963,42 +1819,62 @@ func file_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_internal_conf_conf_proto_rawDescData
 }
 
-var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 14)
+var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
 var file_internal_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),                     // 0: kratos.api.Bootstrap
-	(*AI)(nil),                            // 1: kratos.api.AI
-	(*Server)(nil),                        // 2: kratos.api.Server
-	(*Data)(nil),                          // 3: kratos.api.Data
-	(*Runtime)(nil),                       // 4: kratos.api.Runtime
-	(*AI_OpenAI)(nil),                     // 5: kratos.api.AI.OpenAI
-	(*AI_DeepSeek)(nil),                   // 6: kratos.api.AI.DeepSeek
-	(*Server_HTTP)(nil),                   // 7: kratos.api.Server.HTTP
-	(*Server_GRPC)(nil),                   // 8: kratos.api.Server.GRPC
-	(*Data_Database)(nil),                 // 9: kratos.api.Data.Database
-	(*Data_AgentMemory)(nil),              // 10: kratos.api.Data.AgentMemory
-	(*Runtime_MCPServer)(nil),             // 11: kratos.api.Runtime.MCPServer
-	(*Runtime_RemoteAgent)(nil),           // 12: kratos.api.Runtime.RemoteAgent
-	(*Runtime_MCPServer_Environment)(nil), // 13: kratos.api.Runtime.MCPServer.Environment
+	(*Security)(nil),                      // 1: kratos.api.Security
+	(*Observability)(nil),                 // 2: kratos.api.Observability
+	(*AI)(nil),                            // 3: kratos.api.AI
+	(*Server)(nil),                        // 4: kratos.api.Server
+	(*Data)(nil),                          // 5: kratos.api.Data
+	(*Runtime)(nil),                       // 6: kratos.api.Runtime
+	(*Security_Principal)(nil),            // 7: kratos.api.Security.Principal
+	(*Security_Role)(nil),                 // 8: kratos.api.Security.Role
+	(*Observability_Langfuse)(nil),        // 9: kratos.api.Observability.Langfuse
+	(*AI_OpenAI)(nil),                     // 10: kratos.api.AI.OpenAI
+	(*AI_DeepSeek)(nil),                   // 11: kratos.api.AI.DeepSeek
+	(*AI_Gemini)(nil),                     // 12: kratos.api.AI.Gemini
+	(*AI_Grok)(nil),                       // 13: kratos.api.AI.Grok
+	(*AI_Claude)(nil),                     // 14: kratos.api.AI.Claude
+	(*AI_OpenRouter)(nil),                 // 15: kratos.api.AI.OpenRouter
+	(*Server_HTTP)(nil),                   // 16: kratos.api.Server.HTTP
+	(*Server_GRPC)(nil),                   // 17: kratos.api.Server.GRPC
+	(*Data_Database)(nil),                 // 18: kratos.api.Data.Database
+	(*Data_AgentMemory)(nil),              // 19: kratos.api.Data.AgentMemory
+	(*Runtime_Daytona)(nil),               // 20: kratos.api.Runtime.Daytona
+	(*Runtime_MCPServer)(nil),             // 21: kratos.api.Runtime.MCPServer
+	(*Runtime_RemoteAgent)(nil),           // 22: kratos.api.Runtime.RemoteAgent
+	(*Runtime_MCPServer_Environment)(nil), // 23: kratos.api.Runtime.MCPServer.Environment
 }
 var file_internal_conf_conf_proto_depIdxs = []int32{
-	2,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
-	3,  // 1: kratos.api.Bootstrap.data:type_name -> kratos.api.Data
-	1,  // 2: kratos.api.Bootstrap.ai:type_name -> kratos.api.AI
-	4,  // 3: kratos.api.Bootstrap.runtime:type_name -> kratos.api.Runtime
-	5,  // 4: kratos.api.AI.openai:type_name -> kratos.api.AI.OpenAI
-	6,  // 5: kratos.api.AI.deepseek:type_name -> kratos.api.AI.DeepSeek
-	7,  // 6: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
-	8,  // 7: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
-	9,  // 8: kratos.api.Data.database:type_name -> kratos.api.Data.Database
-	10, // 9: kratos.api.Data.agent_memory:type_name -> kratos.api.Data.AgentMemory
-	12, // 10: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
-	11, // 11: kratos.api.Runtime.mcp_servers:type_name -> kratos.api.Runtime.MCPServer
-	13, // 12: kratos.api.Runtime.MCPServer.env:type_name -> kratos.api.Runtime.MCPServer.Environment
-	13, // [13:13] is the sub-list for method output_type
-	13, // [13:13] is the sub-list for method input_type
-	13, // [13:13] is the sub-list for extension type_name
-	13, // [13:13] is the sub-list for extension extendee
-	0,  // [0:13] is the sub-list for field type_name
+	4,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
+	5,  // 1: kratos.api.Bootstrap.data:type_name -> kratos.api.Data
+	3,  // 2: kratos.api.Bootstrap.ai:type_name -> kratos.api.AI
+	6,  // 3: kratos.api.Bootstrap.runtime:type_name -> kratos.api.Runtime
+	2,  // 4: kratos.api.Bootstrap.observability:type_name -> kratos.api.Observability
+	1,  // 5: kratos.api.Bootstrap.security:type_name -> kratos.api.Security
+	7,  // 6: kratos.api.Security.principals:type_name -> kratos.api.Security.Principal
+	8,  // 7: kratos.api.Security.roles:type_name -> kratos.api.Security.Role
+	9,  // 8: kratos.api.Observability.langfuse:type_name -> kratos.api.Observability.Langfuse
+	10, // 9: kratos.api.AI.openai:type_name -> kratos.api.AI.OpenAI
+	11, // 10: kratos.api.AI.deepseek:type_name -> kratos.api.AI.DeepSeek
+	12, // 11: kratos.api.AI.gemini:type_name -> kratos.api.AI.Gemini
+	13, // 12: kratos.api.AI.grok:type_name -> kratos.api.AI.Grok
+	14, // 13: kratos.api.AI.claude:type_name -> kratos.api.AI.Claude
+	15, // 14: kratos.api.AI.openrouter:type_name -> kratos.api.AI.OpenRouter
+	16, // 15: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
+	17, // 16: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
+	18, // 17: kratos.api.Data.database:type_name -> kratos.api.Data.Database
+	19, // 18: kratos.api.Data.agent_memory:type_name -> kratos.api.Data.AgentMemory
+	22, // 19: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
+	21, // 20: kratos.api.Runtime.mcp_servers:type_name -> kratos.api.Runtime.MCPServer
+	20, // 21: kratos.api.Runtime.daytona:type_name -> kratos.api.Runtime.Daytona
+	23, // 22: kratos.api.Runtime.MCPServer.env:type_name -> kratos.api.Runtime.MCPServer.Environment
+	23, // [23:23] is the sub-list for method output_type
+	23, // [23:23] is the sub-list for method input_type
+	23, // [23:23] is the sub-list for extension type_name
+	23, // [23:23] is the sub-list for extension extendee
+	0,  // [0:23] is the sub-list for field type_name
 }
 
 func init() { file_internal_conf_conf_proto_init() }
@@ -1012,7 +1888,7 @@ func file_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_conf_conf_proto_rawDesc), len(file_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   14,
+			NumMessages:   24,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

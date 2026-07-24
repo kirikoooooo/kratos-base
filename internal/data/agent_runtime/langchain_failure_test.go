@@ -4,12 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/tmc/langchaingo/llms"
+	lmm "kratos-demo/internal/biz/llm"
 )
 
 func TestFormatToolErrorObservationHintsAbsolutePath(t *testing.T) {
-	obs := formatToolErrorObservation(llms.ToolCall{
-		FunctionCall: &llms.FunctionCall{Name: "write_file"},
+	obs := formatToolErrorObservation(lmm.ToolCallPart{
+		FunctionCall: &lmm.FunctionCall{Name: "write_file"},
 	}, "", errAbsolutePath(), 1)
 	if !strings.Contains(obs, "hint:") || !strings.Contains(obs, "相对路径") {
 		t.Fatalf("missing path hint: %q", obs)
@@ -17,8 +17,8 @@ func TestFormatToolErrorObservationHintsAbsolutePath(t *testing.T) {
 }
 
 func TestFormatToolErrorObservationHintsJSONEscape(t *testing.T) {
-	obs := formatToolErrorObservation(llms.ToolCall{
-		FunctionCall: &llms.FunctionCall{Name: "write_file"},
+	obs := formatToolErrorObservation(lmm.ToolCallPart{
+		FunctionCall: &lmm.FunctionCall{Name: "write_file"},
 	}, "", errJSONEscape(), 2)
 	if !strings.Contains(obs, "正斜杠") {
 		t.Fatalf("missing json escape hint: %q", obs)

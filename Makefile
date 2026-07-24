@@ -1,5 +1,13 @@
 MAIN := ./cmd/kratos-demo
 BIN_DIR := bin
+# Prefer GVM's selected Go binary when GOROOT is set. Shell command lookup can
+# otherwise resolve a stale Go toolchain that is incompatible with GOROOT.
+GO ?= $(if $(GOROOT),$(GOROOT)/bin/go,go)
+# Isolate build cache by the active Go version so GVM/toolchain switches do
+# not reuse incompatible compiled standard-library objects.
+GO_VERSION := $(shell $(GO) env GOVERSION | tr -cd '[:alnum:]._-')
+GO_CACHE_DIR ?= /private/tmp/kratos-go-cache-$(GO_VERSION)
+GO_RUN = GOCACHE=$(GO_CACHE_DIR) $(GO)
 
 # Windows 与 macOS/Linux 分别选择 protoc 与二进制后缀
 ifeq ($(OS),Windows_NT)
@@ -32,26 +40,26 @@ wire:
 
 # 编译全部 Go 包（不含可执行文件产物）
 build:
-	go build ./...
+	$(GO_RUN) build ./...
 
 # 当前平台原生二进制（mac/Linux: bin/kratos-demo，Windows: bin/kratos-demo.exe）
 build-bin:
 	@mkdir -p $(BIN_DIR)
-	go build -o $(BIN) $(MAIN)
+	$(GO_RUN) build -o $(BIN) $(MAIN)
 	@echo "built $(BIN)"
 
 # macOS 可执行文件（Apple Silicon + Intel）
 build-mac:
 	@mkdir -p $(BIN_DIR)
-	GOOS=darwin GOARCH=arm64 go build -o $(BIN_MAC_ARM64) $(MAIN)
-	GOOS=darwin GOARCH=amd64 go build -o $(BIN_MAC_AMD64) $(MAIN)
+	GOOS=darwin GOARCH=arm64 $(GO_RUN) build -o $(BIN_MAC_ARM64) $(MAIN)
+	GOOS=darwin GOARCH=amd64 $(GO_RUN) build -o $(BIN_MAC_AMD64) $(MAIN)
 	@echo "built $(BIN_MAC_ARM64)"
 	@echo "built $(BIN_MAC_AMD64)"
 
 # Windows 可执行文件（可在 macOS 上交叉编译）
 build-win:
 	@mkdir -p $(BIN_DIR)
-	GOOS=windows GOARCH=amd64 go build -o $(BIN_WIN) $(MAIN)
+	GOOS=windows GOARCH=amd64 $(GO_RUN) build -o $(BIN_WIN) $(MAIN)
 	@echo "built $(BIN_WIN)"
 
 # 可分发给 Windows 用户的目录：exe + configs + 说明
@@ -59,6 +67,7 @@ release-win: build-win
 	@mkdir -p $(DIST_WIN)/configs
 	cp $(BIN_WIN) $(DIST_WIN)/$(RELEASE_NAME).exe
 	cp configs/config.yaml $(DIST_WIN)/configs/config.yaml
+	cp -R configs/casbin $(DIST_WIN)/configs/casbin
 	@echo "release ready: $(DIST_WIN)/"
 	@echo "  $(RELEASE_NAME).exe -cli"
 
@@ -66,18 +75,19 @@ release-mac: build-bin
 	@mkdir -p $(DIST_MAC)/configs
 	cp $(BIN) $(DIST_MAC)/$(RELEASE_NAME)
 	cp configs/config.yaml $(DIST_MAC)/configs/config.yaml
+	cp -R configs/casbin $(DIST_MAC)/configs/casbin
 	@echo "release ready: $(DIST_MAC)/"
 	@echo "  ./$(RELEASE_NAME) -cli"
 
 cli:
-	go run $(MAIN) -cli
+	$(GO_RUN) run $(MAIN) -cli $(ARGS)
 
 # 使用已编译的原生二进制启动 CLI（先 make build-bin）
 cli-bin: build-bin
 	$(BIN) -cli
 
 run:
-	go run $(MAIN)
+	$(GO_RUN) run $(MAIN)
 
 run-bin: build-bin
 	$(BIN)

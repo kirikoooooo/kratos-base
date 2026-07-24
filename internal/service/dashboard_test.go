@@ -84,6 +84,35 @@ func TestDashboardStreamReturnsStateEvent(t *testing.T) {
 	}
 }
 
+func TestDashboardTraceStreamReturnsEvent(t *testing.T) {
+	trace := data.NewDelegationTraceStore()
+	svc := NewDashboardService(trace, nil, nil, nil, &conf.Runtime{})
+	mux := dashboardTestMux{ServeMux: http.NewServeMux()}
+	svc.Register(mux)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req := httptest.NewRequest(http.MethodGet, "/debug/a2a/events?task_id=trace-sse", nil).WithContext(ctx)
+	rr := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() { mux.ServeHTTP(rr, req); close(done) }()
+	deadline := time.Now().Add(time.Second)
+	for time.Now().Before(deadline) && !strings.Contains(rr.Body.String(), "event: ready") {
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	trace.AppendEvent(datatrace.DelegationEvent{TaskID: "trace-sse", Stage: "tool_read_file"})
+	deadline = time.Now().Add(time.Second)
+	for time.Now().Before(deadline) && !strings.Contains(rr.Body.String(), "event: trace.event") {
+		time.Sleep(10 * time.Millisecond)
+	}
+	cancel()
+	<-done
+	if body := rr.Body.String(); !strings.Contains(body, "event: trace.event") || !strings.Contains(body, "tool_read_file") {
+		t.Fatalf("SSE response = %q", body)
+	}
+}
+
 func TestRunConversationAppendsFinalAnswerEvent(t *testing.T) {
 	trace := data.NewDelegationTraceStore()
 	runtime := fakeDashboardRuntime{

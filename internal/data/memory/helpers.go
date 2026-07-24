@@ -87,28 +87,9 @@ func formatSkillHints(hints []SkillHint) []string {
 	if len(hints) == 0 {
 		return nil
 	}
-	lines := []string{"- ?? Skills????????????:"}
-	for _, hint := range hints {
-		name := strings.TrimSpace(hint.Name)
-		if name == "" {
-			continue
-		}
-		line := "  - " + name
-		if p := strings.TrimSpace(hint.Path); p != "" {
-			line += " @ " + p
-		}
-		if w := strings.TrimSpace(hint.WhenToUse); w != "" {
-			line += ": " + w
-		}
-		if d := strings.TrimSpace(hint.Description); d != "" {
-			line += " - " + d
-		}
-		lines = append(lines, line)
-	}
-	if len(lines) == 1 {
-		return nil
-	}
-	return lines
+	// Keep the catalog out of every system prompt. Search first, then load only
+	// the selected SKILL.md so unrelated instructions never consume context.
+	return []string{"- Skills: use search_skills to find a matching skill, then load_skill to read its full instructions."}
 }
 
 func formatCommandPolicies(policies []CommandPolicy) []string {

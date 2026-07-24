@@ -19,6 +19,7 @@ import (
 	"kratos-demo/internal/consts/public"
 	dataagent "kratos-demo/internal/data/agent_runtime"
 	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
+	dataauthz "kratos-demo/internal/data/authz"
 	datatasking "kratos-demo/internal/data/tasking"
 	datatrace "kratos-demo/internal/data/trace"
 
@@ -26,15 +27,16 @@ import (
 )
 
 type CLIService struct {
-	dash       *DashboardService
-	trace      datatrace.DelegationTraceStore
-	processLog *CLIProcessLog
-	sessionID  string
-	in         io.Reader
-	out        io.Writer
-	shouldExit bool
-	ui         *cliUI
-	lineReader *cliLineReader
+	dash         *DashboardService
+	trace        datatrace.DelegationTraceStore
+	processLog   *CLIProcessLog
+	outputStream *CLIOutputStream
+	sessionID    string
+	in           io.Reader
+	out          io.Writer
+	shouldExit   bool
+	ui           *cliUI
+	lineReader   *cliLineReader
 
 	approvalBridge chan approvalRequest
 
@@ -46,6 +48,7 @@ type CLIService struct {
 	planShown bool
 
 	aiConfig *conf.AI
+	security *conf.Security
 }
 
 type approvalRequest struct {
@@ -64,17 +67,27 @@ func NewCLIService(
 	runtime biz.AgentRuntime,
 	trace datatrace.DelegationTraceStore,
 	memory dataagent.AgentMemory,
+	security *conf.Security,
 	logger log.Logger,
 ) *CLIService {
 	_ = datatasking.NewTaskDispatcher(repo, runtime, trace, memory, logger)
 	return &CLIService{
-		dash:      dash,
-		trace:     trace,
-		sessionID: fmt.Sprintf("cli-%d", time.Now().Unix()),
-		in:        os.Stdin,
-		out:       os.Stdout,
-		permMode:  PermAsk,
+		dash:         dash,
+		trace:        trace,
+		sessionID:    fmt.Sprintf("cli-%d", time.Now().Unix()),
+		in:           os.Stdin,
+		out:          os.Stdout,
+		permMode:     PermAsk,
+		outputStream: NewCLIOutputStream(),
+		security:     security,
 	}
+}
+
+func (c *CLIService) OutputStream() *CLIOutputStream {
+	if c == nil {
+		return nil
+	}
+	return c.outputStream
 }
 
 func (c *CLIService) BindSession(sessionID string, processLog *CLIProcessLog) {
@@ -152,6 +165,7 @@ func (c *CLIService) processLogPath() string {
 
 func (c *CLIService) processTurn(ctx context.Context, prompt string) {
 	c.planShown = false
+	c.publishOutput("cli.turn.started", prompt)
 	c.ui.printUserTurn(prompt)
 	if c.processLog != nil {
 		c.processLog.LogTurnStart(c.sessionID, prompt)
@@ -161,6 +175,19 @@ func (c *CLIService) processTurn(ctx context.Context, prompt string) {
 	defer cancelTurn()
 
 	turnCtx = c.contextWithApproval(turnCtx)
+	if c.security != nil && c.security.GetEnabled() {
+		authorizer, err := dataauthz.NewCasbinFileAuthorizer(c.security)
+		if err != nil {
+			c.ui.printError(fmt.Errorf("load RBAC policy: %w", err))
+			return
+		}
+		principal, err := authorizer.LocalPrincipal(c.security.GetLocalPrincipal())
+		if err != nil {
+			c.ui.printError(err)
+			return
+		}
+		turnCtx = agentctx.WithPrincipal(turnCtx, principal)
+	}
 
 	c.approvalBridge = make(chan approvalRequest)
 	defer func() { c.approvalBridge = nil }()
@@ -242,6 +269,11 @@ turnDone:
 		}
 		c.processLog.LogTurnDone(c.sessionID, summary, output, nil)
 	}
+	if runErr != nil {
+		c.publishOutput("cli.turn.failed", runErr.Error())
+	} else if result != nil {
+		c.publishOutput("cli.turn.completed", result.GetOutput())
+	}
 	c.printResult(result)
 }
 
@@ -309,6 +341,7 @@ func (c *CLIService) processSessionEvents(sessions []datatrace.DelegationSession
 }
 
 func (c *CLIService) displayEvent(event datatrace.DelegationEvent) {
+	c.publishOutput("cli.trace", formatCLIEventLogLine(event))
 	if c == nil || c.ui == nil {
 		return
 	}
@@ -321,6 +354,13 @@ func (c *CLIService) displayEvent(event datatrace.DelegationEvent) {
 	if line := formatCLIEventLine(event, c.ui.color); line != "" {
 		c.ui.printProgressLine(line)
 	}
+}
+
+func (c *CLIService) publishOutput(eventType, text string) {
+	if c == nil || c.outputStream == nil {
+		return
+	}
+	c.outputStream.Publish(CLIOutputEvent{SessionID: c.sessionID, Type: eventType, Text: strings.TrimSpace(text)})
 }
 
 func (c *CLIService) sessionEventCount(sessionID string) int {

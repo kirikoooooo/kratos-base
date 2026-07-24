@@ -14,6 +14,7 @@ import (
 	"kratos-demo/internal/consts/public"
 	agentcontext "kratos-demo/internal/data/agent_runtime/context"
 	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
+	dataauthz "kratos-demo/internal/data/authz"
 	"kratos-demo/internal/data/common"
 	"kratos-demo/internal/data/mcp"
 	agentmemory "kratos-demo/internal/data/memory"
@@ -25,9 +26,9 @@ import (
 	toolcatalog "kratos-demo/third_party/tools"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/tmc/langchaingo/llms"
 	grpcclient "google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	lmm "kratos-demo/internal/biz/llm"
 )
 
 const (
@@ -56,23 +57,32 @@ type langChainAgentRuntime struct {
 	trace          datatrace.DelegationTraceStore
 	memory         agentmemory.AgentMemory
 	pvd            provider.LLMProvider
-	localTools     *agenttool.Runtime
+	localTools     *agenttool.ToolExecutor
 	localToolsErr  error
 	toolCatalog    *toolcatalog.Catalog
 	toolCatalogErr error
 	mcpClients     []*mcp.Client
-	mcpTools       []llms.Tool
+	mcpTools       []lmm.Tool
 }
 
-func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatrace.DelegationTraceStore, sessions datasession.SessionStore, memory agentmemory.AgentMemory, logger log.Logger) biz.AgentRuntime {
+func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatrace.DelegationTraceStore, sessions datasession.SessionStore, memory agentmemory.AgentMemory, logger log.Logger, security ...*conf.Security) biz.AgentRuntime {
 	helper := log.NewHelper(logger)
 	catalog, err := toolcatalog.DefaultCatalog()
 	if err != nil {
 		helper.Warnf("load embedded tool catalog failed: %v", err)
 	}
-	localTools, localToolsErr := agenttool.NewRuntime(trace, sessions)
+	localTools, localToolsErr := agenttool.NewToolExecutor(trace, sessions)
 	if localToolsErr != nil {
 		helper.Warnf("create local tool runtime failed: %v", localToolsErr)
+	}
+	if len(security) > 0 && security[0] != nil {
+		authorizer, authzErr := dataauthz.NewCasbinFileAuthorizer(security[0])
+		if authzErr != nil {
+			helper.Warnf("load RBAC policy failed: %v", authzErr)
+			localToolsErr = authzErr
+		} else if localTools != nil {
+			localTools.SetAuthorizer(authorizer)
+		}
 	}
 	runtime := &langChainAgentRuntime{
 		config:         config,
@@ -88,6 +98,9 @@ func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatra
 		toolCatalogErr: err,
 	}
 	if runtimeConfig != nil {
+		if localTools != nil {
+			localTools.SetDaytona(runtimeConfig.GetDaytona())
+		}
 		clients, tools, mcpErr := mcp.NewClients(context.Background(), runtimeConfig.GetMcpServers())
 		if mcpErr != nil {
 			helper.Warnf("connect MCP servers failed: %v", mcpErr)
@@ -126,7 +139,7 @@ func (r *langChainAgentRuntime) OnStop() {
 }
 
 func (r *langChainAgentRuntime) Name() string {
-	return "langchaingo-openai-runtime"
+	return "openai-runtime"
 }
 
 func (r *langChainAgentRuntime) Supports(agent public.AgentKind) bool {
@@ -332,7 +345,7 @@ func (r *langChainAgentRuntime) runReviewer(ctx context.Context, prompt string) 
 	}, "\n"), prompt, "reviewer agent 已通过真实 LLM 完成审查")
 }
 
-func (r *langChainAgentRuntime) newLLM() (llms.Model, error) {
+func (r *langChainAgentRuntime) newLLM() (lmm.ModelClient, error) {
 	pvd, err := r.getProvider()
 	if err != nil {
 		return nil, err
@@ -340,7 +353,7 @@ func (r *langChainAgentRuntime) newLLM() (llms.Model, error) {
 	return pvd.CreateModel()
 }
 
-func (r *langChainAgentRuntime) newFunctionCallingLLM() (llms.Model, error) {
+func (r *langChainAgentRuntime) newFunctionCallingLLM() (lmm.ModelClient, error) {
 	pvd, err := r.getProvider()
 	if err != nil {
 		return nil, err
@@ -362,7 +375,7 @@ func (r *langChainAgentRuntime) getProvider() (provider.LLMProvider, error) {
 }
 
 type managedToolset struct {
-	Tools    []llms.Tool
+	Tools    []lmm.Tool
 	Handlers map[string]toolcatalog.Handler
 }
 
@@ -382,7 +395,7 @@ func (r *langChainAgentRuntime) buildManagedToolset(bindings []toolcatalog.Bindi
 	if r.localTools != nil {
 		bindings = append(bindings, r.localTools.Bindings()...)
 	}
-	tools := make([]llms.Tool, 0, len(bindings)+len(r.mcpTools))
+	tools := make([]lmm.Tool, 0, len(bindings)+len(r.mcpTools))
 	names := make([]string, 0, len(bindings))
 	handlers := make(map[string]toolcatalog.Handler, len(bindings))
 	for _, binding := range bindings {
@@ -446,7 +459,7 @@ func toolCallingSystemSuffix() string {
 	}, "\n")
 }
 
-func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelClient llms.Model, toolset *managedToolset, systemPrompt, prompt, summary string) (*taskv1.TaskResult, error) {
+func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelClient lmm.ModelClient, toolset *managedToolset, systemPrompt, prompt, summary string) (*taskv1.TaskResult, error) {
 	if modelClient == nil {
 		return nil, errors.New("llm model is nil")
 	}
@@ -482,9 +495,9 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 			r.publishContextUsage(ctx, sessionID, meta)
 			messages = agentcontext.BuildLLMMessages(systemText, loopTurns)
 		}
-		callOptions := []llms.CallOption{}
+		callOptions := []lmm.CallOption{}
 		if toolset != nil && len(toolset.Tools) > 0 {
-			callOptions = append(callOptions, llms.WithTools(toolset.Tools), llms.WithToolChoice("auto"))
+			callOptions = append(callOptions, lmm.WithTools(toolset.Tools), lmm.WithToolChoice("auto"))
 		}
 		response, err := modelClient.GenerateContent(ctx, messages, callOptions...)
 		if err != nil {
@@ -495,6 +508,7 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 			r.recordSessionError(ctx, "llm_generate", "", err.Error(), "")
 			return nil, fmt.Errorf("tool calling loop failed: %w", err)
 		}
+		r.publishLLMGeneration(ctx, messages, response)
 		if response == nil || len(response.Choices) == 0 {
 			if len(messages) > 1 {
 				return r.finishWithFailureAnalysis(ctx, modelClient, messages, systemText, sessionID, summary, errors.New("tool calling loop returned empty response"), "llm_empty_response")
@@ -517,7 +531,7 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 				r.recordSessionError(ctx, "llm_empty_output", "", "tool calling loop returned empty output", "")
 				return nil, errors.New("tool calling loop returned empty output")
 			}
-			messages = append(messages, llms.TextParts(llms.ChatMessageTypeAI, output))
+			messages = append(messages, lmm.TextParts(lmm.RoleAssistant, output))
 			r.persistConversation(ctx, sessionID, messages)
 			return &taskv1.TaskResult{
 				Summary: summary,
@@ -525,15 +539,15 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 			}, nil
 		}
 
-		assistantParts := make([]llms.ContentPart, 0, len(toolCalls)+1)
+		assistantParts := make([]lmm.ContentPart, 0, len(toolCalls)+1)
 		if output != "" {
-			assistantParts = append(assistantParts, llms.TextContent{Text: output})
+			assistantParts = append(assistantParts, lmm.TextContent{Text: output})
 		}
 		for _, tc := range toolCalls {
 			assistantParts = append(assistantParts, tc)
 		}
-		messages = append(messages, llms.MessageContent{
-			Role:  llms.ChatMessageTypeAI,
+		messages = append(messages, lmm.MessageContent{
+			Role:  lmm.RoleAssistant,
 			Parts: assistantParts,
 		})
 
@@ -555,9 +569,9 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 				if tc.FunctionCall != nil && strings.TrimSpace(tc.FunctionCall.Name) != "" {
 					toolRespName = tc.FunctionCall.Name
 				}
-				messages = append(messages, llms.MessageContent{
-					Role: llms.ChatMessageTypeTool,
-					Parts: []llms.ContentPart{llms.ToolCallResponse{
+				messages = append(messages, lmm.MessageContent{
+					Role: lmm.RoleTool,
+					Parts: []lmm.ContentPart{lmm.ToolCallResponse{
 						ToolCallID: tc.ID,
 						Name:       toolRespName,
 						Content:    observation,
@@ -584,9 +598,9 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 			if tc.FunctionCall != nil && strings.TrimSpace(tc.FunctionCall.Name) != "" {
 				toolRespName = tc.FunctionCall.Name
 			}
-			messages = append(messages, llms.MessageContent{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{llms.ToolCallResponse{
+			messages = append(messages, lmm.MessageContent{
+				Role: lmm.RoleTool,
+				Parts: []lmm.ContentPart{lmm.ToolCallResponse{
 					ToolCallID: tc.ID,
 					Name:       toolRespName,
 					Content:    observation,
@@ -612,10 +626,57 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 	return r.finishWithFailureAnalysis(ctx, modelClient, messages, systemText, sessionID, summary, errors.New("tool calling loop exceeded max iterations"), "tool_loop_exhausted")
 }
 
+func (r *langChainAgentRuntime) publishLLMGeneration(ctx context.Context, messages []lmm.MessageContent, response *lmm.ContentResponse) {
+	if r == nil || r.trace == nil || response == nil {
+		return
+	}
+	taskID := agentctx.TaskID(ctx)
+	if taskID == "" {
+		return
+	}
+	output := ""
+	if len(response.Choices) > 0 && response.Choices[0] != nil {
+		output = response.Choices[0].Content
+	}
+	r.trace.AppendEvent(datatrace.DelegationEvent{
+		Time:         time.Now(),
+		TaskID:       taskID,
+		Agent:        string(agentctx.Agent(ctx)),
+		Stage:        "llm_generate",
+		ToolInput:    latestUserMessage(messages),
+		ToolOutput:   output,
+		Model:        response.Model,
+		InputTokens:  response.InputTokens,
+		OutputTokens: response.OutputTokens,
+	})
+}
+
+func latestUserMessage(messages []lmm.MessageContent) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role == lmm.RoleUser {
+			return textFromContentParts(messages[i].Parts)
+		}
+	}
+	return ""
+}
+
+func textFromContentParts(parts []lmm.ContentPart) string {
+	var builder strings.Builder
+	for _, part := range parts {
+		if text, ok := part.(lmm.TextContent); ok && strings.TrimSpace(text.Text) != "" {
+			if builder.Len() > 0 {
+				builder.WriteString("\n")
+			}
+			builder.WriteString(text.Text)
+		}
+	}
+	return builder.String()
+}
+
 func (r *langChainAgentRuntime) finishWithFailureAnalysis(
 	ctx context.Context,
-	modelClient llms.Model,
-	messages []llms.MessageContent,
+	modelClient lmm.ModelClient,
+	messages []lmm.MessageContent,
 	systemText, sessionID, summary string,
 	cause error,
 	stage string,
@@ -625,8 +686,8 @@ func (r *langChainAgentRuntime) finishWithFailureAnalysis(
 		instruction += "\n\n最后一次错误：" + cause.Error()
 	}
 
-	analysisMessages := append([]llms.MessageContent{}, messages...)
-	analysisMessages = append(analysisMessages, llms.TextParts(llms.ChatMessageTypeHuman, instruction))
+	analysisMessages := append([]lmm.MessageContent{}, messages...)
+	analysisMessages = append(analysisMessages, lmm.TextParts(lmm.RoleUser, instruction))
 
 	response, err := modelClient.GenerateContent(ctx, analysisMessages)
 	output := ""
@@ -639,7 +700,7 @@ func (r *langChainAgentRuntime) finishWithFailureAnalysis(
 		}
 	}
 
-	analysisMessages = append(analysisMessages, llms.TextParts(llms.ChatMessageTypeAI, output))
+	analysisMessages = append(analysisMessages, lmm.TextParts(lmm.RoleAssistant, output))
 	r.persistConversation(ctx, sessionID, analysisMessages)
 
 	msg := stage
@@ -734,7 +795,7 @@ func firstMeaningfulLine(text string) string {
 	return ""
 }
 
-func (r *langChainAgentRuntime) publishToolFailure(ctx context.Context, toolName string, call llms.ToolCall, err error) {
+func (r *langChainAgentRuntime) publishToolFailure(ctx context.Context, toolName string, call lmm.ToolCallPart, err error) {
 	if r == nil || r.trace == nil || err == nil {
 		return
 	}
@@ -758,7 +819,7 @@ func (r *langChainAgentRuntime) publishToolFailure(ctx context.Context, toolName
 	})
 }
 
-func toolCallTarget(call llms.ToolCall) string {
+func toolCallTarget(call lmm.ToolCallPart) string {
 	if call.FunctionCall == nil {
 		return ""
 	}
@@ -799,7 +860,7 @@ func (r *langChainAgentRuntime) recordSessionError(ctx context.Context, stage, t
 	}
 }
 
-func formatToolErrorObservation(call llms.ToolCall, output string, err error, attempt int) string {
+func formatToolErrorObservation(call lmm.ToolCallPart, output string, err error, attempt int) string {
 	name := ""
 	if call.FunctionCall != nil {
 		name = strings.TrimSpace(call.FunctionCall.Name)
@@ -827,12 +888,12 @@ func formatToolErrorObservation(call llms.ToolCall, output string, err error, at
 	return strings.Join(parts, "\n")
 }
 
-func normalizeToolCalls(choice *llms.ContentChoice) []llms.ToolCall {
+func normalizeToolCalls(choice *lmm.ContentChoice) []lmm.ToolCallPart {
 	if choice == nil {
 		return nil
 	}
 	if len(choice.ToolCalls) > 0 {
-		out := make([]llms.ToolCall, len(choice.ToolCalls))
+		out := make([]lmm.ToolCallPart, len(choice.ToolCalls))
 		for i, tc := range choice.ToolCalls {
 			out[i] = agentcontext.NormalizeLLMToolCall(tc)
 		}
@@ -841,17 +902,17 @@ func normalizeToolCalls(choice *llms.ContentChoice) []llms.ToolCall {
 	if choice.FuncCall == nil {
 		return nil
 	}
-	return []llms.ToolCall{{
+	return []lmm.ToolCallPart{{
 		ID:   fmt.Sprintf("legacy-func-%d", time.Now().UnixNano()),
 		Type: "function",
-		FunctionCall: &llms.FunctionCall{
+		FunctionCall: &lmm.FunctionCall{
 			Name:      choice.FuncCall.Name,
 			Arguments: choice.FuncCall.Arguments,
 		},
 	}}
 }
 
-func callManagedTool(ctx context.Context, toolset *managedToolset, call llms.ToolCall) (string, error) {
+func callManagedTool(ctx context.Context, toolset *managedToolset, call lmm.ToolCallPart) (string, error) {
 	if toolset == nil {
 		return "", errors.New("managed toolset is nil")
 	}
@@ -945,7 +1006,7 @@ func (r *langChainAgentRuntime) publishContextUsage(ctx context.Context, session
 	})
 }
 
-func (r *langChainAgentRuntime) persistConversation(ctx context.Context, sessionID string, messages []llms.MessageContent) {
+func (r *langChainAgentRuntime) persistConversation(ctx context.Context, sessionID string, messages []lmm.MessageContent) {
 	if r.memory == nil || strings.TrimSpace(sessionID) == "" {
 		return
 	}
@@ -976,7 +1037,7 @@ func (r *langChainAgentRuntime) runPlainLLMTask(ctx context.Context, systemPromp
 		strings.TrimSpace(prompt),
 	}, "\n")
 
-	output, err := llms.GenerateFromSinglePrompt(ctx, modelClient, fullPrompt, llms.WithTemperature(0.2))
+	output, err := lmm.GenerateFromSinglePrompt(ctx, modelClient, fullPrompt, lmm.WithTemperature(0.2))
 	if err != nil {
 		r.log.Warnf("plain llm task call failed: %v", err)
 		return nil, fmt.Errorf("plain llm task call failed: %w", err)

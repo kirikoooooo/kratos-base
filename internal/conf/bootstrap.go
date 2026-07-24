@@ -11,6 +11,12 @@ import (
 //go:embed default_config.yaml
 var defaultConfigYAML []byte
 
+//go:embed default_casbin_model.conf
+var defaultCasbinModel []byte
+
+//go:embed default_casbin_policy.csv
+var defaultCasbinPolicy []byte
+
 // EnsureConfigPath resolves the config directory/file and materializes a default
 // config.yaml when missing (for standalone exe distribution).
 func EnsureConfigPath(path string) (string, error) {
@@ -90,5 +96,29 @@ func bootstrapConfigDir(dir string) error {
 	if err := os.WriteFile(configFile, defaultConfigYAML, 0o644); err != nil {
 		return fmt.Errorf("write default config: %w", err)
 	}
+	casbinDir := filepath.Join(dir, "casbin")
+	if err := os.MkdirAll(casbinDir, 0o755); err != nil {
+		return fmt.Errorf("create Casbin config directory: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(casbinDir, "model.conf"), defaultCasbinModel, 0o644); err != nil {
+		return fmt.Errorf("write Casbin model: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(casbinDir, "policy.csv"), defaultCasbinPolicy, 0o644); err != nil {
+		return fmt.Errorf("write Casbin policy: %w", err)
+	}
 	return nil
+}
+
+// ResolveFilePaths resolves Casbin assets against the configuration directory.
+func ResolveFilePaths(configDir string, security *Security) *Security {
+	if security == nil {
+		return nil
+	}
+	if file := strings.TrimSpace(security.GetCasbinModelFile()); file != "" && !filepath.IsAbs(file) {
+		security.CasbinModelFile = filepath.Join(configDir, file)
+	}
+	if file := strings.TrimSpace(security.GetCasbinPolicyFile()); file != "" && !filepath.IsAbs(file) {
+		security.CasbinPolicyFile = filepath.Join(configDir, file)
+	}
+	return security
 }

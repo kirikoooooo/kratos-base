@@ -31,6 +31,14 @@ func defaultBaseURLForProvider(provider string) string {
 	switch provider {
 	case public.ProviderDeepSeek:
 		return public.DefaultCLIDeepSeekBaseURL
+	case public.ProviderGemini:
+		return public.GeminiDefaultBaseURL
+	case public.ProviderGrok:
+		return public.GrokDefaultBaseURL
+	case public.ProviderClaude:
+		return public.ClaudeDefaultBaseURL
+	case public.ProviderOpenRouter:
+		return public.OpenRouterDefaultBaseURL
 	default:
 		return public.DefaultCLIOpenAIBaseURL
 	}
@@ -110,6 +118,46 @@ func ApplyCLICredentials(ai *conf.AI, creds *CLICredentials) {
 		if baseURL != "" {
 			ai.Deepseek.BaseUrl = baseURL
 		}
+	case public.ProviderGemini:
+		if ai.Gemini == nil {
+			ai.Gemini = &conf.AI_Gemini{}
+		}
+		if key != "" {
+			ai.Gemini.ApiKey = key
+		}
+		if baseURL != "" {
+			ai.Gemini.BaseUrl = baseURL
+		}
+	case public.ProviderGrok:
+		if ai.Grok == nil {
+			ai.Grok = &conf.AI_Grok{}
+		}
+		if key != "" {
+			ai.Grok.ApiKey = key
+		}
+		if baseURL != "" {
+			ai.Grok.BaseUrl = baseURL
+		}
+	case public.ProviderClaude:
+		if ai.Claude == nil {
+			ai.Claude = &conf.AI_Claude{}
+		}
+		if key != "" {
+			ai.Claude.ApiKey = key
+		}
+		if baseURL != "" {
+			ai.Claude.BaseUrl = baseURL
+		}
+	case public.ProviderOpenRouter:
+		if ai.Openrouter == nil {
+			ai.Openrouter = &conf.AI_OpenRouter{}
+		}
+		if key != "" {
+			ai.Openrouter.ApiKey = key
+		}
+		if baseURL != "" {
+			ai.Openrouter.BaseUrl = baseURL
+		}
 	default:
 		if ai.Openai == nil {
 			ai.Openai = &conf.AI_OpenAI{}
@@ -135,6 +183,14 @@ func aiConfigReady(ai *conf.AI) bool {
 		}
 		return strings.TrimSpace(ai.Deepseek.GetApiKey()) != "" &&
 			strings.TrimSpace(ai.Deepseek.GetBaseUrl()) != ""
+	case public.ProviderGemini:
+		return ai.Gemini != nil && strings.TrimSpace(ai.Gemini.GetApiKey()) != "" && strings.TrimSpace(ai.Gemini.GetBaseUrl()) != ""
+	case public.ProviderGrok:
+		return ai.Grok != nil && strings.TrimSpace(ai.Grok.GetApiKey()) != "" && strings.TrimSpace(ai.Grok.GetBaseUrl()) != ""
+	case public.ProviderClaude:
+		return ai.Claude != nil && strings.TrimSpace(ai.Claude.GetApiKey()) != "" && strings.TrimSpace(ai.Claude.GetBaseUrl()) != ""
+	case public.ProviderOpenRouter:
+		return ai.Openrouter != nil && strings.TrimSpace(ai.Openrouter.GetApiKey()) != "" && strings.TrimSpace(ai.Openrouter.GetBaseUrl()) != ""
 	default:
 		if ai.Openai == nil {
 			return false
@@ -149,6 +205,14 @@ func providerLabel(ai *conf.AI) string {
 	switch effectiveProvider(ai) {
 	case public.ProviderDeepSeek:
 		return "DeepSeek"
+	case public.ProviderGemini:
+		return "Gemini（OpenAI 兼容）"
+	case public.ProviderGrok:
+		return "Grok（OpenAI 兼容）"
+	case public.ProviderClaude:
+		return "Claude（OpenAI 兼容）"
+	case public.ProviderOpenRouter:
+		return "OpenRouter"
 	default:
 		return "OpenAI 兼容"
 	}

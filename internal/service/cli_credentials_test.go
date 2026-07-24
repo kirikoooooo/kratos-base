@@ -23,6 +23,18 @@ func TestApplyCLICredentials(t *testing.T) {
 	}
 }
 
+func TestApplyCLICredentialsDeepSeek(t *testing.T) {
+	ai := &conf.AI{Provider: "deepseek", Deepseek: &conf.AI_DeepSeek{}}
+	creds := &CLICredentials{APIKey: "sk-deepseek", BaseURL: "https://api.deepseek.com"}
+	ApplyCLICredentials(ai, creds)
+	if ai.Deepseek.GetApiKey() != creds.APIKey || ai.Deepseek.GetBaseUrl() != creds.BaseURL {
+		t.Fatalf("deepseek credentials were not injected")
+	}
+	if !aiConfigReady(ai) {
+		t.Fatal("deepseek config should be ready")
+	}
+}
+
 func TestSaveLoadCLICredentials(t *testing.T) {
 	dir := t.TempDir()
 	t.Chdir(dir)

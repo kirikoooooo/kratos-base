@@ -13,17 +13,19 @@ import (
 const maxTraceSessions = 32
 
 type memoryTraceStore struct {
-	mu       sync.RWMutex
-	sessions map[string]*DelegationSession
-	order    []string
-	subs     map[chan []DelegationSession]struct{}
+	mu        sync.RWMutex
+	sessions  map[string]*DelegationSession
+	order     []string
+	subs      map[chan []DelegationSession]struct{}
+	eventSubs map[chan TraceStreamEvent]struct{}
 }
 
 func NewDelegationTraceStore() DelegationTraceStore {
 	return &memoryTraceStore{
-		sessions: make(map[string]*DelegationSession),
-		order:    make([]string, 0, maxTraceSessions),
-		subs:     make(map[chan []DelegationSession]struct{}),
+		sessions:  make(map[string]*DelegationSession),
+		order:     make([]string, 0, maxTraceSessions),
+		subs:      make(map[chan []DelegationSession]struct{}),
+		eventSubs: make(map[chan TraceStreamEvent]struct{}),
 	}
 }
 
@@ -100,6 +102,22 @@ func (s *memoryTraceStore) AppendEvent(event DelegationEvent) {
 	session.Plan = advancePlan(session.Plan, event)
 	session.UpdatedAt = event.Time
 	s.broadcastLocked()
+	s.broadcastEventLocked(TraceStreamEvent{Type: "trace.event", TaskID: event.TaskID, Event: event, Published: time.Now()})
+}
+
+func (s *memoryTraceStore) SubscribeEvents() (<-chan TraceStreamEvent, func()) {
+	ch := make(chan TraceStreamEvent, 32)
+	s.mu.Lock()
+	s.eventSubs[ch] = struct{}{}
+	s.mu.Unlock()
+	return ch, func() {
+		s.mu.Lock()
+		if _, ok := s.eventSubs[ch]; ok {
+			delete(s.eventSubs, ch)
+			close(ch)
+		}
+		s.mu.Unlock()
+	}
 }
 
 func (s *memoryTraceStore) UpdatePlan(taskID string, steps []PlanStep) {
@@ -243,6 +261,15 @@ func (s *memoryTraceStore) broadcastLocked() {
 	for ch := range s.subs {
 		select {
 		case ch <- snapshot:
+		default:
+		}
+	}
+}
+
+func (s *memoryTraceStore) broadcastEventLocked(event TraceStreamEvent) {
+	for ch := range s.eventSubs {
+		select {
+		case ch <- event:
 		default:
 		}
 	}

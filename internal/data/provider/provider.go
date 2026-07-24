@@ -34,21 +34,42 @@ func NewProvider(aiConf *conf.AI, logger *log.Helper) (LLMProvider, error) {
 	}
 
 	providerName := strings.TrimSpace(strings.ToLower(aiConf.GetProvider()))
-	switch providerName {
-	case "", "openai":
-		p, err := newOpenAIProvider(aiConf, logger)
-		if err != nil {
-			return nil, err
+	if providerName == "" {
+		providerName = "openai"
+	}
+	primary, err := newProviderByName(aiConf, logger, providerName)
+	if err != nil {
+		return nil, err
+	}
+	providers := []LLMProvider{primary}
+	for _, fallback := range aiConf.GetFallbackProviders() {
+		name := strings.TrimSpace(strings.ToLower(fallback))
+		if name == "" || name == providerName {
+			continue
 		}
-		return p, nil
-	case "deepseek":
-		p, err := newDeepSeekProvider(aiConf, logger)
-		if err != nil {
-			return nil, err
+		p, fallbackErr := newProviderByName(aiConf, logger, name)
+		if fallbackErr != nil {
+			logger.Warnf("ignore unavailable fallback provider %s: %v", name, fallbackErr)
+			continue
 		}
-		return p, nil
+		providers = append(providers, p)
+	}
+	if len(providers) == 1 {
+		return primary, nil
+	}
+	delay := time.Duration(aiConf.GetRetryDelayMilliseconds()) * time.Millisecond
+	return &fallbackProvider{providers: providers, retries: int(aiConf.GetMaxRetries()), delay: delay}, nil
+}
+
+func newProviderByName(aiConf *conf.AI, logger *log.Helper, providerName string) (LLMProvider, error) {
+	providerType := bizprovider.ProviderType(providerName)
+	switch providerType {
+	case bizprovider.ProviderTypeOpenAI, bizprovider.ProviderTypeDeepSeek,
+		bizprovider.ProviderTypeGemini, bizprovider.ProviderTypeGrok,
+		bizprovider.ProviderTypeClaude, bizprovider.ProviderTypeOpenRouter:
+		return newOpenAICompatibleProvider(aiConf, providerType, logger)
 	default:
-		return nil, fmt.Errorf("unknown ai provider: %s (supported: openai, deepseek)", providerName)
+		return nil, fmt.Errorf("unknown ai provider: %s (supported: openai, deepseek, gemini, grok, claude, openrouter)", providerName)
 	}
 }
 

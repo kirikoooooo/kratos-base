@@ -3,7 +3,7 @@ package agent
 import (
 	"testing"
 
-	"github.com/tmc/langchaingo/llms"
+	lmm "kratos-demo/internal/biz/llm"
 )
 
 func TestClassifyAgentProgressStagePlan(t *testing.T) {
@@ -28,8 +28,8 @@ func TestFirstMeaningfulLine(t *testing.T) {
 }
 
 func TestToolCallTargetJSONPath(t *testing.T) {
-	target := toolCallTarget(llms.ToolCall{
-		FunctionCall: &llms.FunctionCall{
+	target := toolCallTarget(lmm.ToolCallPart{
+		FunctionCall: &lmm.FunctionCall{
 			Arguments: `{"path":"scripts/hello.ps1","content":"echo hi"}`,
 		},
 	})
@@ -39,8 +39,8 @@ func TestToolCallTargetJSONPath(t *testing.T) {
 }
 
 func TestToolCallTargetPlainPath(t *testing.T) {
-	target := toolCallTarget(llms.ToolCall{
-		FunctionCall: &llms.FunctionCall{
+	target := toolCallTarget(lmm.ToolCallPart{
+		FunctionCall: &lmm.FunctionCall{
 			Arguments: `README.md`,
 		},
 	})

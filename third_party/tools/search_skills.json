@@ -1,0 +1,19 @@
+{
+  "type": "function",
+  "function": {
+    "name": "search_skills",
+    "description": "检索本地 Skill 的紧凑名称和摘要；选择匹配项后再用 load_skill 加载完整 SKILL.md。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "input": {
+          "type": "string",
+          "description": "检索词，如 milvus、debug 或 code review；也可传 {\"query\":\"milvus\"}。"
+        }
+      },
+      "required": ["input"],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

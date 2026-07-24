@@ -328,8 +328,8 @@ TEST_REMAP = {
 	"session_error_helpers_test.go": ("memory/session_error_test.go", "memory", MEMORY_RULES),
 	"file_edit_ops_test.go": ("file/edit_ops_test.go", "file", FILE_RULES),
 	"file_diff_test.go": ("file/diff_test.go", "file", FILE_RULES),
-	"local_tools_change_test.go": ("tool/runtime_change_test.go", "tool", TOOL_RULES + [("newLocalToolRuntime", "NewRuntime")]),
-	"local_tools_edit_test.go": ("tool/runtime_edit_test.go", "tool", TOOL_RULES + [("newLocalToolRuntime", "NewRuntime")]),
+	"local_tools_change_test.go": ("tool/tool_executor_change_test.go", "tool", TOOL_RULES + [("newLocalToolRuntime", "NewRuntime")]),
+	"local_tools_edit_test.go": ("tool/tool_executor_edit_test.go", "tool", TOOL_RULES + [("newLocalToolRuntime", "NewRuntime")]),
 }
 
 
@@ -402,7 +402,7 @@ def main() -> None:
 		"",
 	)
 	tool_content = tool_content.replace("previewPrompt(input)", "common.PreviewPrompt(input)")
-	(AGENT / "tool/runtime.go").write_text(tool_content, encoding="utf-8")
+	(AGENT / "tool/tool_executor.go").write_text(tool_content, encoding="utf-8")
 
 	for src_name, (dst_rel, pkg, rules) in TEST_REMAP.items():
 		src = AGENT / src_name

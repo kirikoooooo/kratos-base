@@ -1,6 +1,7 @@
 package trace
 
 import (
+	"context"
 	"time"
 
 	taskv1 "kratos-demo/api/task/v1"
@@ -17,8 +18,33 @@ type DelegationTraceStore interface {
 	UpdateContextUsage(taskID string, usage ContextUsageSnapshot, compress *ContextCompressResult)
 }
 
+// DelegationTraceObserver mirrors lifecycle data to an optional external backend.
+// Implementations must not let transport failures affect task execution.
+type DelegationTraceObserver interface {
+	StartTask(taskID string, agent public.AgentKind, status string)
+	UpdateTask(taskID string, status string, result *taskv1.TaskResult, err error)
+	AppendEvent(event DelegationEvent)
+	UpdatePlan(taskID string, steps []PlanStep)
+	UpdateContextUsage(taskID string, usage ContextUsageSnapshot, compress *ContextCompressResult)
+	Shutdown(ctx context.Context) error
+}
+
 type DelegationTraceSubscriber interface {
 	Subscribe() (<-chan []DelegationSession, func())
+}
+
+// DelegationEventSubscriber publishes each trace change without requiring
+// consumers to diff full session snapshots.
+type DelegationEventSubscriber interface {
+	SubscribeEvents() (<-chan TraceStreamEvent, func())
+}
+
+type TraceStreamEvent struct {
+	Type      string             `json:"type"`
+	TaskID    string             `json:"task_id"`
+	Event     DelegationEvent    `json:"event,omitempty"`
+	Session   *DelegationSession `json:"session,omitempty"`
+	Published time.Time          `json:"published"`
 }
 
 type DelegationEvent struct {
@@ -36,6 +62,9 @@ type DelegationEvent struct {
 	ToolInput     string    `json:"tool_input,omitempty"`
 	ToolOutput    string    `json:"tool_output,omitempty"`
 	ExitCode      int       `json:"exit_code,omitempty"`
+	Model         string    `json:"model,omitempty"`
+	InputTokens   int       `json:"input_tokens,omitempty"`
+	OutputTokens  int       `json:"output_tokens,omitempty"`
 }
 
 type PlanStep struct {

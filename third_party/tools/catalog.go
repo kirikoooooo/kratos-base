@@ -10,8 +10,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/tmc/langchaingo/llms"
-	langtools "github.com/tmc/langchaingo/tools"
+	lmm "kratos-demo/internal/biz/llm"
 )
 
 //go:embed *.json
@@ -114,16 +113,16 @@ func (c *Catalog) Lookup(name string) (Definition, bool) {
 	return definition, ok
 }
 
-func (c *Catalog) AsLLMTools(names []string) ([]llms.Tool, error) {
-	tools := make([]llms.Tool, 0, len(names))
+func (c *Catalog) AsLLMTools(names []string) ([]lmm.Tool, error) {
+	tools := make([]lmm.Tool, 0, len(names))
 	for _, name := range names {
 		definition, ok := c.Lookup(name)
 		if !ok {
 			return nil, fmt.Errorf("tool definition not found: %s", strings.TrimSpace(name))
 		}
-		tools = append(tools, llms.Tool{
+		tools = append(tools, lmm.Tool{
 			Type: definition.Type,
-			Function: &llms.FunctionDefinition{
+			Function: &lmm.FunctionDefinition{
 				Name:        definition.Function.Name,
 				Description: definition.Function.Description,
 				Parameters:  definition.Function.Parameters,
@@ -132,51 +131,6 @@ func (c *Catalog) AsLLMTools(names []string) ([]llms.Tool, error) {
 		})
 	}
 	return tools, nil
-}
-
-func (c *Catalog) BindLangChainTools(bindings []BindingSpec) ([]langtools.Tool, error) {
-	bound := make([]langtools.Tool, 0, len(bindings))
-	for _, binding := range bindings {
-		name := strings.TrimSpace(binding.Name)
-		if name == "" {
-			return nil, fmt.Errorf("tool binding name is empty")
-		}
-		if binding.Handler == nil {
-			return nil, fmt.Errorf("tool handler is nil: %s", name)
-		}
-
-		definition, ok := c.Lookup(name)
-		if !ok {
-			return nil, fmt.Errorf("tool definition not found: %s", name)
-		}
-
-		bound = append(bound, &boundLangChainTool{
-			definition: definition,
-			run:        binding.Handler,
-		})
-	}
-	return bound, nil
-}
-
-type boundLangChainTool struct {
-	definition Definition
-	run        Handler
-}
-
-func (t *boundLangChainTool) Name() string {
-	return t.definition.Function.Name
-}
-
-func (t *boundLangChainTool) Description() string {
-	description := strings.TrimSpace(t.definition.Function.Description)
-	if inputHint := extractInputHint(t.definition.Function.Parameters); inputHint != "" {
-		return description + " 输入字段 input：" + inputHint
-	}
-	return description
-}
-
-func (t *boundLangChainTool) Call(ctx context.Context, input string) (string, error) {
-	return t.run(ctx, extractBoundInput(input))
 }
 
 func validateDefinition(definition Definition, source string) error {
@@ -193,39 +147,4 @@ func validateDefinition(definition Definition, source string) error {
 		return fmt.Errorf("tool definition %s function.parameters is empty", source)
 	}
 	return nil
-}
-
-func extractInputHint(parameters any) string {
-	root, ok := parameters.(map[string]any)
-	if !ok {
-		return ""
-	}
-	properties, ok := root["properties"].(map[string]any)
-	if !ok {
-		return ""
-	}
-	inputDef, ok := properties["input"].(map[string]any)
-	if !ok {
-		return ""
-	}
-	description, _ := inputDef["description"].(string)
-	return strings.TrimSpace(description)
-}
-
-func extractBoundInput(raw string) string {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return ""
-	}
-
-	var payload struct {
-		Input string `json:"input"`
-	}
-	if strings.HasPrefix(raw, "{") && json.Unmarshal([]byte(raw), &payload) == nil {
-		if strings.TrimSpace(payload.Input) != "" {
-			return strings.TrimSpace(payload.Input)
-		}
-	}
-
-	return raw
 }

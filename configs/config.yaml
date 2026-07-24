@@ -19,6 +19,10 @@ data:
     tool_output_max_chars: 8000
 ai:
   provider: deepseek
+  # Optional ordered fallbacks. Providers without credentials are skipped at startup.
+  fallback_providers: []
+  max_retries: 1
+  retry_delay_milliseconds: 300
   openai:
     # api_key / base_url 由 CLI 写入 .myagent/credentials.json，此处留空
     # api_key: ""
@@ -30,7 +34,31 @@ ai:
     # base_url: ""  # 默认 https://api.deepseek.com
     model: deepseek-v4-flash
     timeout_seconds: 180
+  # Gemini uses Google's OpenAI-compatible endpoint, not a separate SDK.
+  gemini:
+    model: gemini-2.5-flash
+    base_url: https://generativelanguage.googleapis.com/v1beta/openai/
+    timeout_seconds: 180
+  grok:
+    model: grok-3-mini
+    base_url: https://api.x.ai/v1
+    timeout_seconds: 180
+  claude:
+    model: claude-sonnet-4-5
+    base_url: https://api.anthropic.com/v1
+    timeout_seconds: 180
+  openrouter:
+    model: google/gemini-2.5-flash
+    base_url: https://openrouter.ai/api/v1
+    timeout_seconds: 180
 runtime:
+  daytona:
+    enabled: false
+    api_key_env: DAYTONA_API_KEY
+    api_url: https://app.daytona.io/api
+    # target: us
+    snapshot: daytona-small
+    auto_delete_minutes: 0
 
   # 使用 remote_service/mcp-server-milvus 中的官方源码和嵌入式 Milvus Lite。
   mcp_servers:
@@ -45,3 +73,21 @@ runtime:
     - agent: coder
       target: 127.0.0.1:9001
       timeout: 8
+
+observability:
+  langfuse:
+    # Keys are read from LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY, never from this file.
+    enabled: true
+    host: https://cloud.langfuse.com
+    public_key_env: LANGFUSE_PUBLIC_KEY
+    secret_key_env: LANGFUSE_SECRET_KEY
+    environment: development
+    release: kratos-demo
+    flush_timeout_seconds: 5
+
+security:
+  # Casbin RBAC. No matching principal, role, permission, path, or command is denied.
+  enabled: true
+  local_principal: local-dev
+  casbin_model_file: casbin/model.conf
+  casbin_policy_file: casbin/policy.csv

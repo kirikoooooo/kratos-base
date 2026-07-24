@@ -3,19 +3,19 @@ package context
 import (
 	"testing"
 
-	"github.com/tmc/langchaingo/llms"
+	lmm "kratos-demo/internal/biz/llm"
 )
 
 func TestConversationTurnsFromLLMRoundTrip(t *testing.T) {
-	messages := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, "system"),
-		llms.TextParts(llms.ChatMessageTypeHuman, "hello"),
+	messages := []lmm.MessageContent{
+		lmm.TextParts(lmm.RoleSystem, "system"),
+		lmm.TextParts(lmm.RoleUser, "hello"),
 		{
-			Role: llms.ChatMessageTypeAI,
-			Parts: []llms.ContentPart{
-				llms.ToolCall{
+			Role: lmm.RoleAssistant,
+			Parts: []lmm.ContentPart{
+				lmm.ToolCallPart{
 					ID: "call-1",
-					FunctionCall: &llms.FunctionCall{
+					FunctionCall: &lmm.FunctionCall{
 						Name:      "read_file",
 						Arguments: `{"path":"README.md"}`,
 					},
@@ -23,8 +23,8 @@ func TestConversationTurnsFromLLMRoundTrip(t *testing.T) {
 			},
 		},
 		{
-			Role: llms.ChatMessageTypeTool,
-			Parts: []llms.ContentPart{llms.ToolCallResponse{
+			Role: lmm.RoleTool,
+			Parts: []lmm.ContentPart{lmm.ToolCallResponse{
 				ToolCallID: "call-1",
 				Name:       "read_file",
 				Content:    "ok",
@@ -40,20 +40,20 @@ func TestConversationTurnsFromLLMRoundTrip(t *testing.T) {
 	if len(restored) != 3 {
 		t.Fatalf("restored message count = %d, want 3", len(restored))
 	}
-	if restored[0].Role != llms.ChatMessageTypeHuman {
+	if restored[0].Role != lmm.RoleUser {
 		t.Fatalf("first restored role = %s, want human", restored[0].Role)
 	}
-	if restored[1].Role != llms.ChatMessageTypeAI {
+	if restored[1].Role != lmm.RoleAssistant {
 		t.Fatalf("second restored role = %s, want ai", restored[1].Role)
 	}
-	toolCall, ok := restored[1].Parts[0].(llms.ToolCall)
+	toolCall, ok := restored[1].Parts[0].(lmm.ToolCallPart)
 	if !ok {
 		t.Fatalf("expected tool call part, got %T", restored[1].Parts[0])
 	}
 	if toolCall.Type != "function" {
 		t.Fatalf("tool call type = %q, want function", toolCall.Type)
 	}
-	if restored[2].Role != llms.ChatMessageTypeTool {
+	if restored[2].Role != lmm.RoleTool {
 		t.Fatalf("third restored role = %s, want tool", restored[2].Role)
 	}
 }

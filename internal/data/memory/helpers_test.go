@@ -13,11 +13,7 @@ func TestFormatAgentMemoryForPrompt(t *testing.T) {
 			Name:      "read_file",
 			WhenToUse: "read docs first",
 		}},
-		SkillHints: []SkillHint{{
-			Name:      "systematic-debugging",
-			Path:      ".agents/skills/debugging/systematic-debugging/SKILL.md",
-			WhenToUse: "when debugging failures",
-		}},
+		SkillHints: []SkillHint{{Name: "systematic-debugging"}},
 		CommandPolicies: []CommandPolicy{{
 			Situation: "verify go build",
 			Commands:  []string{"go build ./..."},
@@ -37,7 +33,7 @@ func TestFormatAgentMemoryForPrompt(t *testing.T) {
 	for _, want := range []string{
 		"?????",
 		"read_file",
-		"systematic-debugging",
+		"search_skills",
 		"go build ./...",
 		"?????",
 		"????????: read_file",
@@ -46,5 +42,8 @@ func TestFormatAgentMemoryForPrompt(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("prompt context missing %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "systematic-debugging") {
+		t.Fatalf("skill catalog leaked into prompt context:\n%s", got)
 	}
 }

@@ -6,7 +6,8 @@ import (
 	"testing"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/tmc/langchaingo/llms"
+	lmm "kratos-demo/internal/biz/llm"
+	bizprovider "kratos-demo/internal/biz/provider"
 
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/data/provider"
@@ -14,25 +15,27 @@ import (
 
 type fakeLLM struct{}
 
-func (fakeLLM) GenerateContent(_ context.Context, messages []llms.MessageContent, _ ...llms.CallOption) (*llms.ContentResponse, error) {
+func (fakeLLM) GenerateContent(_ context.Context, messages []lmm.MessageContent, _ ...lmm.CallOption) (*lmm.ContentResponse, error) {
 	parts := make([]string, 0, len(messages))
 	for _, msg := range messages {
 		for _, part := range msg.Parts {
-			if text, ok := part.(llms.TextContent); ok {
+			if text, ok := part.(lmm.TextContent); ok {
 				parts = append(parts, text.Text)
 			}
 		}
 	}
-	return &llms.ContentResponse{Choices: []*llms.ContentChoice{{Content: strings.Join(parts, "\n")}}}, nil
+	return &lmm.ContentResponse{Choices: []*lmm.ContentChoice{{Content: strings.Join(parts, "\n")}}}, nil
 }
 
-func (fakeLLM) Call(_ context.Context, prompt string, _ ...llms.CallOption) (string, error) {
+func (fakeLLM) Call(_ context.Context, prompt string, _ ...lmm.CallOption) (string, error) {
 	return prompt, nil
 }
 
 type fakeProvider struct{}
 
-func (fakeProvider) CreateModel(_ ...provider.ModelOption) (llms.Model, error) {
+func (fakeProvider) GetProviderName() bizprovider.ProviderType { return bizprovider.ProviderTypeOpenAI }
+
+func (fakeProvider) CreateModel(_ ...provider.ModelOption) (lmm.ModelClient, error) {
 	return fakeLLM{}, nil
 }
 

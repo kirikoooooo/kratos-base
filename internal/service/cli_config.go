@@ -152,6 +152,22 @@ func (c *CLIService) printAIConfigStatus() {
 			maskedKey = maskCLIAPIKey(c.aiConfig.Deepseek.GetApiKey())
 			baseURL = strings.TrimSpace(c.aiConfig.Deepseek.GetBaseUrl())
 		}
+	case public.ProviderGemini:
+		if c.aiConfig.Gemini != nil {
+			maskedKey, baseURL = maskCLIAPIKey(c.aiConfig.Gemini.GetApiKey()), strings.TrimSpace(c.aiConfig.Gemini.GetBaseUrl())
+		}
+	case public.ProviderGrok:
+		if c.aiConfig.Grok != nil {
+			maskedKey, baseURL = maskCLIAPIKey(c.aiConfig.Grok.GetApiKey()), strings.TrimSpace(c.aiConfig.Grok.GetBaseUrl())
+		}
+	case public.ProviderClaude:
+		if c.aiConfig.Claude != nil {
+			maskedKey, baseURL = maskCLIAPIKey(c.aiConfig.Claude.GetApiKey()), strings.TrimSpace(c.aiConfig.Claude.GetBaseUrl())
+		}
+	case public.ProviderOpenRouter:
+		if c.aiConfig.Openrouter != nil {
+			maskedKey, baseURL = maskCLIAPIKey(c.aiConfig.Openrouter.GetApiKey()), strings.TrimSpace(c.aiConfig.Openrouter.GetBaseUrl())
+		}
 	default:
 		if c.aiConfig.Openai != nil {
 			maskedKey = maskCLIAPIKey(c.aiConfig.Openai.GetApiKey())
@@ -214,6 +230,14 @@ func availableModels(ai *conf.AI) []modelEntry {
 			{Name: "deepseek-chat", Desc: "V3 · 通用对话"},
 			{Name: "deepseek-coder", Desc: "V3 · 代码生成"},
 		}
+	case public.ProviderGemini:
+		return []modelEntry{{Name: "gemini-2.5-flash", Desc: "快速通用"}, {Name: "gemini-2.5-pro", Desc: "复杂推理"}}
+	case public.ProviderGrok:
+		return []modelEntry{{Name: "grok-3-mini", Desc: "快速推理"}, {Name: "grok-3", Desc: "通用"}}
+	case public.ProviderClaude:
+		return []modelEntry{{Name: "claude-sonnet-4-5", Desc: "通用与代码"}, {Name: "claude-opus-4-5", Desc: "复杂推理"}}
+	case public.ProviderOpenRouter:
+		return []modelEntry{{Name: "google/gemini-2.5-flash", Desc: "Gemini"}, {Name: "anthropic/claude-sonnet-4", Desc: "Claude"}}
 	default:
 		return []modelEntry{
 			{Name: "gpt-4o-mini", Desc: "轻量快速 · 128K 上下文"},
@@ -237,6 +261,26 @@ func currentModel(ai *conf.AI) string {
 			}
 			return m
 		}
+	case public.ProviderGemini:
+		if ai.Gemini != nil && strings.TrimSpace(ai.Gemini.GetModel()) != "" {
+			return strings.TrimSpace(ai.Gemini.GetModel())
+		}
+		return public.GeminiDefaultModel
+	case public.ProviderGrok:
+		if ai.Grok != nil && strings.TrimSpace(ai.Grok.GetModel()) != "" {
+			return strings.TrimSpace(ai.Grok.GetModel())
+		}
+		return public.GrokDefaultModel
+	case public.ProviderClaude:
+		if ai.Claude != nil && strings.TrimSpace(ai.Claude.GetModel()) != "" {
+			return strings.TrimSpace(ai.Claude.GetModel())
+		}
+		return public.ClaudeDefaultModel
+	case public.ProviderOpenRouter:
+		if ai.Openrouter != nil && strings.TrimSpace(ai.Openrouter.GetModel()) != "" {
+			return strings.TrimSpace(ai.Openrouter.GetModel())
+		}
+		return "google/gemini-2.5-flash"
 	default:
 		if ai.Openai != nil {
 			m := strings.TrimSpace(ai.Openai.GetModel())
@@ -260,6 +304,26 @@ func setModel(ai *conf.AI, model string) {
 			ai.Deepseek = &conf.AI_DeepSeek{}
 		}
 		ai.Deepseek.Model = model
+	case public.ProviderGemini:
+		if ai.Gemini == nil {
+			ai.Gemini = &conf.AI_Gemini{}
+		}
+		ai.Gemini.Model = model
+	case public.ProviderGrok:
+		if ai.Grok == nil {
+			ai.Grok = &conf.AI_Grok{}
+		}
+		ai.Grok.Model = model
+	case public.ProviderClaude:
+		if ai.Claude == nil {
+			ai.Claude = &conf.AI_Claude{}
+		}
+		ai.Claude.Model = model
+	case public.ProviderOpenRouter:
+		if ai.Openrouter == nil {
+			ai.Openrouter = &conf.AI_OpenRouter{}
+		}
+		ai.Openrouter.Model = model
 	default:
 		if ai.Openai == nil {
 			ai.Openai = &conf.AI_OpenAI{}

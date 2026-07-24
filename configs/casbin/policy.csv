@@ -1,0 +1,38 @@
+# p, role, permission, path, command
+p, developer, tool.read_file, README.md, *
+p, developer, tool.read_file, api/*, *
+p, developer, tool.read_file, internal/*, *
+p, developer, tool.read_file, configs/*, *
+p, developer, tool.read_file, docs/*, *
+p, developer, tool.read_file, scripts/*, *
+p, developer, tool.read_file, third_party/*, *
+p, developer, tool.search_skills, *, *
+p, developer, tool.load_skill, *, *
+p, developer, tool.edit_file, api/*, *
+p, developer, tool.edit_file, internal/*, *
+p, developer, tool.edit_file, configs/*, *
+p, developer, tool.edit_file, docs/*, *
+p, developer, tool.edit_file, scripts/*, *
+p, developer, tool.edit_file, third_party/*, *
+p, developer, tool.write_file, api/*, *
+p, developer, tool.write_file, internal/*, *
+p, developer, tool.write_file, configs/*, *
+p, developer, tool.write_file, docs/*, *
+p, developer, tool.write_file, scripts/*, *
+p, developer, tool.write_file, third_party/*, *
+p, developer, tool.delete_file, api/*, *
+p, developer, tool.delete_file, internal/*, *
+p, developer, tool.delete_file, configs/*, *
+p, developer, tool.delete_file, docs/*, *
+p, developer, tool.delete_file, scripts/*, *
+p, developer, tool.delete_file, third_party/*, *
+p, developer, tool.exec_command, *, go test ./...
+p, developer, tool.exec_command, *, go build ./...
+p, developer, tool.exec_command, *, go vet ./...
+p, developer, tool.exec_command, *, make proto
+p, developer, tool.exec_command, *, make test
+# Daytona is deliberately omitted. Grant only to a dedicated analyst role.
+# p, analyst, tool.daytona_data_analysis, *, *
+
+# g, principal, role
+g, local-dev, developer

@@ -5,6 +5,7 @@ import (
 
 	"kratos-demo/internal/conf"
 	dataagent "kratos-demo/internal/data/agent_runtime"
+	datalangfuse "kratos-demo/internal/data/observability/langfuse"
 	datasession "kratos-demo/internal/data/session"
 	datatasking "kratos-demo/internal/data/tasking"
 	datatrace "kratos-demo/internal/data/trace"
@@ -17,7 +18,7 @@ var ProviderSet = wire.NewSet(
 	NewData,
 	datatasking.NewTaskRepo,
 	datatasking.NewTaskUsecase,
-	datatrace.NewDelegationTraceStore,
+	NewLangfuseTraceStore,
 	datasession.NewSessionStore,
 	dataagent.NewAgentMemoryStore,
 	dataagent.NewAgentMemoryConfig,
@@ -31,6 +32,14 @@ func NewAgentMemoryUsecaseProvider(store dataagent.AgentMemoryStore, cfg dataage
 		return nil, err
 	}
 	return dataagent.NewAgentMemoryUsecase(store, cfg), nil
+}
+
+func NewLangfuseTraceStore(config *conf.Observability, logger log.Logger) (datatrace.DelegationTraceStore, func(), error) {
+	observer, cleanup, err := datalangfuse.New(config, logger)
+	if err != nil {
+		return nil, nil, err
+	}
+	return datatrace.NewMirroredTraceStore(datatrace.NewDelegationTraceStore(), observer), cleanup, nil
 }
 
 type Data struct {

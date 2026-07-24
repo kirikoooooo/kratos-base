@@ -9,6 +9,47 @@ message Bootstrap {
   Data data = 2;
   AI ai = 3;
   Runtime runtime = 4;
+  Observability observability = 5;
+  Security security = 6;
+}
+
+message Security {
+  message Principal {
+    string id = 1;
+    repeated string roles = 2;
+  }
+  message Role {
+    string name = 1;
+    repeated string permissions = 2;
+    repeated string paths = 3;
+    repeated string command_allowlist = 4;
+  }
+
+  // Disabled only for explicit local development. Enabled policies deny by default.
+  bool enabled = 1;
+  string local_principal = 2;
+  repeated Principal principals = 3;
+  repeated Role roles = 4;
+  // Casbin model and policy files, resolved relative to the config directory.
+  string casbin_model_file = 5;
+  string casbin_policy_file = 6;
+}
+
+message Observability {
+  message Langfuse {
+    // Disabled or missing credentials leaves local tracing unchanged.
+    bool enabled = 1;
+    // Cloud default: https://cloud.langfuse.com. Self-hosted deployments use their API host.
+    string host = 2;
+    // Environment variable names; never put the actual keys in config files.
+    string public_key_env = 3;
+    string secret_key_env = 4;
+    string environment = 5;
+    string release = 6;
+    int64 flush_timeout_seconds = 7;
+  }
+
+  Langfuse langfuse = 1;
 }
 
 message AI {
@@ -27,10 +68,47 @@ message AI {
     int64 timeout_seconds = 4;
   }
 
+  // Gemini exposes an OpenAI-compatible endpoint; no Google-specific SDK is required.
+  message Gemini {
+    string api_key = 1;
+    string base_url = 2;
+    string model = 3;
+    int64 timeout_seconds = 4;
+  }
+
+  message Grok {
+    string api_key = 1;
+    string base_url = 2;
+    string model = 3;
+    int64 timeout_seconds = 4;
+  }
+
+  message Claude {
+    string api_key = 1;
+    string base_url = 2;
+    string model = 3;
+    int64 timeout_seconds = 4;
+  }
+
+  message OpenRouter {
+    string api_key = 1;
+    string base_url = 2;
+    string model = 3;
+    int64 timeout_seconds = 4;
+  }
+
   OpenAI openai = 1;
   DeepSeek deepseek = 2;
-  // LLM 厂商：openai / deepseek。默认 openai
+  // LLM 厂商：openai / deepseek / gemini / grok / claude / openrouter。默认 openai。
   string provider = 3;
+  repeated string fallback_providers = 4;
+  // Each provider gets max_retries + 1 attempts before trying the next fallback.
+  int32 max_retries = 5;
+  int64 retry_delay_milliseconds = 6;
+  Gemini gemini = 7;
+  Grok grok = 8;
+  Claude claude = 9;
+  OpenRouter openrouter = 10;
 }
 
 message Server {
@@ -73,6 +151,19 @@ message Data {
 
 message Runtime {
 
+  message Daytona {
+    // Disabled by default. When enabled, data analysis can run in a remote sandbox.
+    bool enabled = 1;
+    // Environment variable containing the Daytona API key; never store the key in YAML.
+    string api_key_env = 2;
+    string api_url = 3;
+    string target = 4;
+    // Daytona snapshot with Python and plotting dependencies.
+    string snapshot = 5;
+    // Sandbox lifetime; 0 asks Daytona to delete the sandbox immediately after it stops.
+    int64 auto_delete_minutes = 6;
+  }
+
   message MCPServer {
 
     message Environment {
@@ -98,4 +189,5 @@ message Runtime {
 
   repeated RemoteAgent remotes = 1;
   repeated MCPServer mcp_servers = 2;
+  Daytona daytona = 3;
 }

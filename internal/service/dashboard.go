@@ -77,9 +77,44 @@ func (s *DashboardService) Register(mux interface {
 	mux.HandleFunc("/debug/a2a", s.handleDashboard)
 	mux.HandleFunc("/debug/a2a/state", s.handleState)
 	mux.HandleFunc("/debug/a2a/stream", s.handleStream)
+	mux.HandleFunc("/debug/a2a/events", s.handleTraceEvents)
 	mux.HandleFunc("/debug/a2a/agent/start", s.handleStartAgent)
 	mux.HandleFunc("/debug/a2a/message", s.handleMessage)
 	mux.HandleFunc("/debug/a2a/verify", s.handleVerify)
+}
+
+func (s *DashboardService) handleTraceEvents(w http.ResponseWriter, r *http.Request) {
+	flusher, ok := prepareSSE(w)
+	if !ok {
+		return
+	}
+	subscriber, ok := s.trace.(datatrace.DelegationEventSubscriber)
+	if !ok {
+		writeJSON(w, http.StatusNotImplemented, map[string]any{"error": "trace store does not support event subscriptions"})
+		return
+	}
+	taskID := strings.TrimSpace(r.URL.Query().Get("task_id"))
+	ch, cancel := subscriber.SubscribeEvents()
+	defer cancel()
+	if !writeSSE(w, flusher, "ready", map[string]string{"task_id": taskID}) {
+		return
+	}
+	for {
+		select {
+		case <-r.Context().Done():
+			return
+		case event, open := <-ch:
+			if !open {
+				return
+			}
+			if taskID != "" && event.TaskID != taskID {
+				continue
+			}
+			if !writeSSE(w, flusher, event.Type, event) {
+				return
+			}
+		}
+	}
 }
 
 func (s *DashboardService) handleDashboard(w http.ResponseWriter, _ *http.Request) {

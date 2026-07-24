@@ -55,15 +55,26 @@ const (
 const (
 	ProviderOpenAI   = "openai"
 	ProviderDeepSeek = "deepseek"
+	ProviderGemini   = "gemini"
+	ProviderGrok     = "grok"
+	ProviderClaude   = "claude"
+	ProviderOpenRouter = "openrouter"
 )
 
 const (
 	OpenAIDefaultModel   = "gpt-4o-mini"
 	DeepSeekDefaultModel = "deepseek-v4-flash"
+	GeminiDefaultModel   = "gemini-2.5-flash"
+	GrokDefaultModel     = "grok-3-mini"
+	ClaudeDefaultModel   = "claude-sonnet-4-5"
 )
 
 const (
 	DeepSeekDefaultBaseURL    = "https://api.deepseek.com"
+	GeminiDefaultBaseURL      = "https://generativelanguage.googleapis.com/v1beta/openai/"
+	GrokDefaultBaseURL        = "https://api.x.ai/v1"
+	ClaudeDefaultBaseURL      = "https://api.anthropic.com/v1"
+	OpenRouterDefaultBaseURL  = "https://openrouter.ai/api/v1"
 	DefaultCLIOpenAIBaseURL   = "https://api.openai-proxy.org/v1"
 	DefaultCLIDeepSeekBaseURL = "https://api.deepseek.com"
 )

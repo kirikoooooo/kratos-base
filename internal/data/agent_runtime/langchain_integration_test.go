@@ -18,7 +18,7 @@ import (
 	toolcatalog "kratos-demo/third_party/tools"
 
 	"github.com/go-kratos/kratos/v2/log"
-	"github.com/tmc/langchaingo/llms"
+	lmm "kratos-demo/internal/biz/llm"
 	grpcserver "google.golang.org/grpc"
 )
 
@@ -26,19 +26,19 @@ type scriptedToolLoopLLM struct {
 	callCount int
 }
 
-func (m *scriptedToolLoopLLM) GenerateContent(_ context.Context, messages []llms.MessageContent, _ ...llms.CallOption) (*llms.ContentResponse, error) {
+func (m *scriptedToolLoopLLM) GenerateContent(_ context.Context, messages []lmm.MessageContent, _ ...lmm.CallOption) (*lmm.ContentResponse, error) {
 	m.callCount++
 	switch m.callCount {
 	case 1:
 		if len(messages) != 2 {
 			return nil, fmt.Errorf("first call message count = %d, want 2", len(messages))
 		}
-		return &llms.ContentResponse{
-			Choices: []*llms.ContentChoice{{
-				ToolCalls: []llms.ToolCall{{
+		return &lmm.ContentResponse{
+			Choices: []*lmm.ContentChoice{{
+				ToolCalls: []lmm.ToolCallPart{{
 					ID:   "call-readme",
 					Type: "function",
-					FunctionCall: &llms.FunctionCall{
+					FunctionCall: &lmm.FunctionCall{
 						Name:      "read_file",
 						Arguments: `{"input":"README.md"}`,
 					},
@@ -49,15 +49,15 @@ func (m *scriptedToolLoopLLM) GenerateContent(_ context.Context, messages []llms
 		if len(messages) != 4 {
 			return nil, fmt.Errorf("second call message count = %d, want 4", len(messages))
 		}
-		toolResp, ok := messages[3].Parts[0].(llms.ToolCallResponse)
+		toolResp, ok := messages[3].Parts[0].(lmm.ToolCallResponse)
 		if !ok {
-			return nil, fmt.Errorf("tool response part type = %T, want llms.ToolCallResponse", messages[3].Parts[0])
+			return nil, fmt.Errorf("tool response part type = %T, want lmm.ToolCallResponse", messages[3].Parts[0])
 		}
 		if !strings.Contains(toolResp.Content, "README.md") {
 			return nil, fmt.Errorf("tool response content = %q, want README.md", toolResp.Content)
 		}
-		return &llms.ContentResponse{
-			Choices: []*llms.ContentChoice{{
+		return &lmm.ContentResponse{
+			Choices: []*lmm.ContentChoice{{
 				Content: "已读取 README.md 并完成总结",
 			}},
 		}, nil
@@ -66,7 +66,7 @@ func (m *scriptedToolLoopLLM) GenerateContent(_ context.Context, messages []llms
 	}
 }
 
-func (m *scriptedToolLoopLLM) Call(_ context.Context, prompt string, _ ...llms.CallOption) (string, error) {
+func (m *scriptedToolLoopLLM) Call(_ context.Context, prompt string, _ ...lmm.CallOption) (string, error) {
 	return prompt, nil
 }
 
@@ -74,16 +74,16 @@ type selfCorrectingToolLoopLLM struct {
 	callCount int
 }
 
-func (m *selfCorrectingToolLoopLLM) GenerateContent(_ context.Context, messages []llms.MessageContent, _ ...llms.CallOption) (*llms.ContentResponse, error) {
+func (m *selfCorrectingToolLoopLLM) GenerateContent(_ context.Context, messages []lmm.MessageContent, _ ...lmm.CallOption) (*lmm.ContentResponse, error) {
 	m.callCount++
 	switch m.callCount {
 	case 1:
-		return &llms.ContentResponse{
-			Choices: []*llms.ContentChoice{{
-				ToolCalls: []llms.ToolCall{{
+		return &lmm.ContentResponse{
+			Choices: []*lmm.ContentChoice{{
+				ToolCalls: []lmm.ToolCallPart{{
 					ID:   "call-bad-path",
 					Type: "function",
-					FunctionCall: &llms.FunctionCall{
+					FunctionCall: &lmm.FunctionCall{
 						Name:      "read_file",
 						Arguments: `{"input":"configs/app.yml"}`,
 					},
@@ -91,19 +91,19 @@ func (m *selfCorrectingToolLoopLLM) GenerateContent(_ context.Context, messages 
 			}},
 		}, nil
 	case 2:
-		toolResp, ok := messages[3].Parts[0].(llms.ToolCallResponse)
+		toolResp, ok := messages[3].Parts[0].(lmm.ToolCallResponse)
 		if !ok {
-			return nil, fmt.Errorf("tool response part type = %T, want llms.ToolCallResponse", messages[3].Parts[0])
+			return nil, fmt.Errorf("tool response part type = %T, want lmm.ToolCallResponse", messages[3].Parts[0])
 		}
 		if !strings.Contains(toolResp.Content, "status: error") {
 			return nil, fmt.Errorf("expected error observation, got %q", toolResp.Content)
 		}
-		return &llms.ContentResponse{
-			Choices: []*llms.ContentChoice{{
-				ToolCalls: []llms.ToolCall{{
+		return &lmm.ContentResponse{
+			Choices: []*lmm.ContentChoice{{
+				ToolCalls: []lmm.ToolCallPart{{
 					ID:   "call-good-path",
 					Type: "function",
-					FunctionCall: &llms.FunctionCall{
+					FunctionCall: &lmm.FunctionCall{
 						Name:      "read_file",
 						Arguments: `{"input":"configs/config.yaml"}`,
 					},
@@ -111,15 +111,15 @@ func (m *selfCorrectingToolLoopLLM) GenerateContent(_ context.Context, messages 
 			}},
 		}, nil
 	case 3:
-		toolResp, ok := messages[5].Parts[0].(llms.ToolCallResponse)
+		toolResp, ok := messages[5].Parts[0].(lmm.ToolCallResponse)
 		if !ok {
-			return nil, fmt.Errorf("tool response part type = %T, want llms.ToolCallResponse", messages[5].Parts[0])
+			return nil, fmt.Errorf("tool response part type = %T, want lmm.ToolCallResponse", messages[5].Parts[0])
 		}
 		if !strings.Contains(toolResp.Content, "path: configs/config.yaml") {
 			return nil, fmt.Errorf("expected successful observation, got %q", toolResp.Content)
 		}
-		return &llms.ContentResponse{
-			Choices: []*llms.ContentChoice{{
+		return &lmm.ContentResponse{
+			Choices: []*lmm.ContentChoice{{
 				Content: "已修正路径并成功读取配置文件",
 			}},
 		}, nil
@@ -128,7 +128,7 @@ func (m *selfCorrectingToolLoopLLM) GenerateContent(_ context.Context, messages 
 	}
 }
 
-func (m *selfCorrectingToolLoopLLM) Call(_ context.Context, prompt string, _ ...llms.CallOption) (string, error) {
+func (m *selfCorrectingToolLoopLLM) Call(_ context.Context, prompt string, _ ...lmm.CallOption) (string, error) {
 	return prompt, nil
 }
 
@@ -136,11 +136,11 @@ type alwaysFailingToolLoopLLM struct {
 	callCount int
 }
 
-func (m *alwaysFailingToolLoopLLM) GenerateContent(_ context.Context, messages []llms.MessageContent, _ ...llms.CallOption) (*llms.ContentResponse, error) {
+func (m *alwaysFailingToolLoopLLM) GenerateContent(_ context.Context, messages []lmm.MessageContent, _ ...lmm.CallOption) (*lmm.ContentResponse, error) {
 	m.callCount++
 	if m.callCount == maxToolCorrectionRounds+1 {
-		return &llms.ContentResponse{
-			Choices: []*llms.ContentChoice{{
+		return &lmm.ContentResponse{
+			Choices: []*lmm.ContentChoice{{
 				Content: "## 失败分析\n\n文件 configs/missing.yaml 不存在，已重试 5 次仍无法读取。建议使用相对路径并确认文件存在。",
 			}},
 		}, nil
@@ -150,20 +150,20 @@ func (m *alwaysFailingToolLoopLLM) GenerateContent(_ context.Context, messages [
 	}
 	if m.callCount > 1 {
 		last := messages[len(messages)-1]
-		toolResp, ok := last.Parts[0].(llms.ToolCallResponse)
+		toolResp, ok := last.Parts[0].(lmm.ToolCallResponse)
 		if !ok {
-			return nil, fmt.Errorf("tool response part type = %T, want llms.ToolCallResponse", last.Parts[0])
+			return nil, fmt.Errorf("tool response part type = %T, want lmm.ToolCallResponse", last.Parts[0])
 		}
 		if !strings.Contains(toolResp.Content, "status: error") {
 			return nil, fmt.Errorf("expected error observation, got %q", toolResp.Content)
 		}
 	}
-	return &llms.ContentResponse{
-		Choices: []*llms.ContentChoice{{
-			ToolCalls: []llms.ToolCall{{
+	return &lmm.ContentResponse{
+		Choices: []*lmm.ContentChoice{{
+			ToolCalls: []lmm.ToolCallPart{{
 				ID:   fmt.Sprintf("call-fail-%d", m.callCount),
 				Type: "function",
-				FunctionCall: &llms.FunctionCall{
+				FunctionCall: &lmm.FunctionCall{
 					Name:      "read_file",
 					Arguments: `{"input":"configs/missing.yaml"}`,
 				},
@@ -172,7 +172,7 @@ func (m *alwaysFailingToolLoopLLM) GenerateContent(_ context.Context, messages [
 	}, nil
 }
 
-func (m *alwaysFailingToolLoopLLM) Call(_ context.Context, prompt string, _ ...llms.CallOption) (string, error) {
+func (m *alwaysFailingToolLoopLLM) Call(_ context.Context, prompt string, _ ...lmm.CallOption) (string, error) {
 	return prompt, nil
 }
 
@@ -181,7 +181,7 @@ func TestRunToolCallingLoopUsesToolMessages(t *testing.T) {
 	runtime := &langChainAgentRuntime{log: log.NewHelper(logger)}
 	model := &scriptedToolLoopLLM{}
 	toolset := &managedToolset{
-		Tools: []llms.Tool{{Type: "function", Function: &llms.FunctionDefinition{Name: "read_file"}}},
+		Tools: []lmm.Tool{{Type: "function", Function: &lmm.FunctionDefinition{Name: "read_file"}}},
 		Handlers: map[string]toolcatalog.Handler{
 			"read_file": func(_ context.Context, input string) (string, error) {
 				return "path: " + input + "\n1: phase one goal", nil
@@ -206,7 +206,7 @@ func TestRunToolCallingLoopSelfCorrectsToolFailure(t *testing.T) {
 	runtime := &langChainAgentRuntime{log: log.NewHelper(logger)}
 	model := &selfCorrectingToolLoopLLM{}
 	toolset := &managedToolset{
-		Tools: []llms.Tool{{Type: "function", Function: &llms.FunctionDefinition{Name: "read_file"}}},
+		Tools: []lmm.Tool{{Type: "function", Function: &lmm.FunctionDefinition{Name: "read_file"}}},
 		Handlers: map[string]toolcatalog.Handler{
 			"read_file": func(_ context.Context, input string) (string, error) {
 				if input == "configs/app.yml" {
@@ -237,7 +237,7 @@ func TestRunToolCallingLoopFailsAfterFiveCorrectionRounds(t *testing.T) {
 	runtime := &langChainAgentRuntime{log: log.NewHelper(logger)}
 	model := &alwaysFailingToolLoopLLM{}
 	toolset := &managedToolset{
-		Tools: []llms.Tool{{Type: "function", Function: &llms.FunctionDefinition{Name: "read_file"}}},
+		Tools: []lmm.Tool{{Type: "function", Function: &lmm.FunctionDefinition{Name: "read_file"}}},
 		Handlers: map[string]toolcatalog.Handler{
 			"read_file": func(_ context.Context, input string) (string, error) {
 				return "", fmt.Errorf("read file %s failed: file does not exist", input)

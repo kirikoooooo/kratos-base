@@ -2,24 +2,29 @@ package provider
 
 import (
 	"testing"
+
+	"kratos-demo/internal/conf"
+
+	"github.com/go-kratos/kratos/v2/log"
 )
 
-func TestNormalizeForFunctionCalling(t *testing.T) {
+func TestEveryProviderUsesOpenAICompatibleClient(t *testing.T) {
 	tests := []struct {
-		name  string
-		input string
-		want  string
+		name string
+		ai   *conf.AI
 	}{
-		{name: "blank", input: "", want: openaiDefaultModel},
-		{name: "gpt5 fallback", input: "gpt-5.4-mini", want: openaiDefaultModel},
-		{name: "compatible model kept", input: "gpt-4o-mini", want: "gpt-4o-mini"},
-		{name: "deepseek model kept", input: "deepseek-chat", want: "deepseek-chat"},
+		{"openai", &conf.AI{Provider: "openai", Openai: &conf.AI_OpenAI{ApiKey: "key"}}},
+		{"deepseek", &conf.AI{Provider: "deepseek", Deepseek: &conf.AI_DeepSeek{ApiKey: "key"}}},
 	}
-
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := normalizeForFunctionCalling(tt.input); got != tt.want {
-				t.Fatalf("normalizeForFunctionCalling(%q) = %q, want %q", tt.input, got, tt.want)
+			provider, err := NewProvider(tt.ai, log.NewHelper(log.NewStdLogger(nil)))
+			if err != nil {
+				t.Fatal(err)
+			}
+			model, err := provider.CreateModel(WithFunctionCalling())
+			if err != nil || model == nil {
+				t.Fatalf("model=%v err=%v", model, err)
 			}
 		})
 	}

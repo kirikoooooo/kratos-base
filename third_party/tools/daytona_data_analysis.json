@@ -1,0 +1,18 @@
+{
+  "type": "function",
+  "function": {
+    "name": "daytona_data_analysis",
+    "description": "仅在数据分析、统计计算或需要生成图表时使用。它在 Daytona 隔离沙盒中运行 Python 代码，并返回生成的 PNG 图表。代码必须把图表保存到 output_path；可选 files 为需要上传到沙盒的工作区相对数据文件。",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "code": {"type": "string", "description": "Python 分析与绘图代码；必须保存 PNG 到 output_path。"},
+        "output_path": {"type": "string", "description": "沙盒中的 PNG 输出绝对路径，例如 /tmp/analysis.png。"},
+        "files": {"type": "array", "items": {"type": "string"}, "description": "可选：上传到 /tmp/input 的工作区相对文件路径。"}
+      },
+      "required": ["code", "output_path"],
+      "additionalProperties": false
+    },
+    "strict": true
+  }
+}

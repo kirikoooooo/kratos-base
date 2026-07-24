@@ -18,7 +18,7 @@ import (
 
 	"kratos-demo/internal/conf"
 
-	"github.com/tmc/langchaingo/llms"
+	lmm "kratos-demo/internal/biz/llm"
 )
 
 type Config struct {
@@ -37,12 +37,12 @@ type Client struct {
 	stderr *bytes.Buffer
 	mu     sync.Mutex
 	nextID int64
-	tools  []llms.Tool
+	tools  []lmm.Tool
 }
 
-func NewClients(ctx context.Context, servers []*conf.Runtime_MCPServer) ([]*Client, []llms.Tool, error) {
+func NewClients(ctx context.Context, servers []*conf.Runtime_MCPServer) ([]*Client, []lmm.Tool, error) {
 	clients := make([]*Client, 0, len(servers))
-	tools := make([]llms.Tool, 0)
+	tools := make([]lmm.Tool, 0)
 	for _, server := range servers {
 		if server == nil || strings.TrimSpace(server.GetCommand()) == "" {
 			continue
@@ -67,9 +67,9 @@ func NewClients(ctx context.Context, servers []*conf.Runtime_MCPServer) ([]*Clie
 	return clients, tools, nil
 }
 
-func (c *Client) Tools() []llms.Tool { return append([]llms.Tool(nil), c.tools...) }
+func (c *Client) Tools() []lmm.Tool { return append([]lmm.Tool(nil), c.tools...) }
 
-func NewClient(ctx context.Context, config Config) (*Client, []llms.Tool, error) {
+func NewClient(ctx context.Context, config Config) (*Client, []lmm.Tool, error) {
 	if strings.TrimSpace(config.Command) == "" {
 		return nil, nil, errors.New("mcp command is empty")
 	}
@@ -241,7 +241,7 @@ func (c *Client) write(payload any) error {
 	return err
 }
 
-func decodeToolsList(raw []byte) ([]llms.Tool, error) {
+func decodeToolsList(raw []byte) ([]lmm.Tool, error) {
 	var response struct {
 		Tools []struct {
 			Name        string `json:"name"`
@@ -252,12 +252,12 @@ func decodeToolsList(raw []byte) ([]llms.Tool, error) {
 	if err := json.Unmarshal(raw, &response); err != nil {
 		return nil, fmt.Errorf("decode mcp tools/list: %w", err)
 	}
-	tools := make([]llms.Tool, 0, len(response.Tools))
+	tools := make([]lmm.Tool, 0, len(response.Tools))
 	for _, tool := range response.Tools {
 		if strings.TrimSpace(tool.Name) == "" || tool.InputSchema == nil {
 			return nil, errors.New("mcp tool missing name or inputSchema")
 		}
-		tools = append(tools, llms.Tool{Type: "function", Function: &llms.FunctionDefinition{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema}})
+		tools = append(tools, lmm.Tool{Type: "function", Function: &lmm.FunctionDefinition{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema}})
 	}
 	return tools, nil
 }

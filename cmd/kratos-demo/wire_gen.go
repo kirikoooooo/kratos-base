@@ -10,11 +10,9 @@ import (
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/data"
-	agent "kratos-demo/internal/data/agent_runtime"
 	"kratos-demo/internal/data/memory"
 	"kratos-demo/internal/data/session"
 	"kratos-demo/internal/data/tasking"
-	"kratos-demo/internal/data/trace"
 	"kratos-demo/internal/server"
 	"kratos-demo/internal/service"
 
@@ -24,9 +22,12 @@ import (
 
 // Injectors from wire.go:
 
-func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, runtimeConf *conf.Runtime, logger log.Logger) (*kratos.App, func(), error) {
+func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, runtimeConf *conf.Runtime, observabilityConf *conf.Observability, securityConf *conf.Security, logger log.Logger) (*kratos.App, func(), error) {
 	taskRepo := tasking.NewTaskRepo(logger)
-	delegationTraceStore := trace.NewDelegationTraceStore()
+	delegationTraceStore, cleanup, err := data.NewLangfuseTraceStore(observabilityConf, logger)
+	if err != nil {
+		return nil, nil, err
+	}
 	sessionStore := session.NewSessionStore(dataConf)
 	v, err := memory.NewAgentMemoryStore(dataConf, logger)
 	if err != nil {
@@ -37,7 +38,7 @@ func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, runt
 	if err != nil {
 		return nil, nil, err
 	}
-	agentRuntime := agent.NewAgentRuntime(aiConf, runtimeConf, delegationTraceStore, sessionStore, agentMemory, logger)
+	agentRuntime := data.NewAgentRuntime(aiConf, runtimeConf, securityConf, delegationTraceStore, sessionStore, agentMemory, logger)
 	taskDispatcher := tasking.NewTaskDispatcher(taskRepo, agentRuntime, delegationTraceStore, agentMemory, logger)
 	taskUsecase := tasking.NewTaskUsecase(taskRepo, taskDispatcher)
 	taskService := service.NewTaskService(taskUsecase)
@@ -47,12 +48,14 @@ func wireApp(serverConf *conf.Server, dataConf *conf.Data, aiConf *conf.AI, runt
 	dashboardService := service.NewDashboardService(delegationTraceStore, agentRuntimeUsecase, agentMemory, sessionStore, runtimeConf)
 	httpServer := server.NewHTTPServer(serverConf, taskService, dashboardService, logger)
 	app := newApp(logger, grpcServer, httpServer)
-	return app, func() {
-	}, nil
+	return app, cleanup, nil
 }
 
-func wireCLI(dataConf *conf.Data, aiConf *conf.AI, runtimeConf *conf.Runtime, logger log.Logger) (*service.CLIService, func(), error) {
-	delegationTraceStore := trace.NewDelegationTraceStore()
+func wireCLI(dataConf *conf.Data, aiConf *conf.AI, runtimeConf *conf.Runtime, observabilityConf *conf.Observability, securityConf *conf.Security, logger log.Logger) (*service.CLIService, func(), error) {
+	delegationTraceStore, cleanup, err := data.NewLangfuseTraceStore(observabilityConf, logger)
+	if err != nil {
+		return nil, nil, err
+	}
 	sessionStore := session.NewSessionStore(dataConf)
 	v, err := memory.NewAgentMemoryStore(dataConf, logger)
 	if err != nil {
@@ -63,11 +66,10 @@ func wireCLI(dataConf *conf.Data, aiConf *conf.AI, runtimeConf *conf.Runtime, lo
 	if err != nil {
 		return nil, nil, err
 	}
-	agentRuntime := agent.NewAgentRuntime(aiConf, runtimeConf, delegationTraceStore, sessionStore, agentMemory, logger)
+	agentRuntime := data.NewAgentRuntime(aiConf, runtimeConf, securityConf, delegationTraceStore, sessionStore, agentMemory, logger)
 	agentRuntimeUsecase := biz.NewAgentRuntimeUsecase(agentRuntime)
 	dashboardService := service.NewDashboardService(delegationTraceStore, agentRuntimeUsecase, agentMemory, sessionStore, runtimeConf)
 	taskRepo := tasking.NewTaskRepo(logger)
-	cliService := service.NewCLIService(dashboardService, taskRepo, agentRuntime, delegationTraceStore, agentMemory, logger)
-	return cliService, func() {
-	}, nil
+	cliService := service.NewCLIService(dashboardService, taskRepo, agentRuntime, delegationTraceStore, agentMemory, securityConf, logger)
+	return cliService, cleanup, nil
 }

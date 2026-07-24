@@ -33,8 +33,8 @@ func NewAgentMemoryConfig(dataConf *conf.Data) dataagent.AgentMemoryConfig {
 	return dataagent.NewAgentMemoryConfig(dataConf)
 }
 
-func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatrace.DelegationTraceStore, sessions datasession.SessionStore, memory dataagent.AgentMemory, logger log.Logger) biz.AgentRuntime {
-	return dataagent.NewAgentRuntime(config, runtimeConfig, trace, sessions, memory, logger)
+func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, security *conf.Security, trace datatrace.DelegationTraceStore, sessions datasession.SessionStore, memory dataagent.AgentMemory, logger log.Logger) biz.AgentRuntime {
+	return dataagent.NewAgentRuntime(config, runtimeConfig, trace, sessions, memory, logger, security)
 }
 
 func NewTaskDispatcher(repo datatasking.TaskRepo, runtime biz.AgentRuntime, trace datatrace.DelegationTraceStore, memory dataagent.AgentMemory, logger log.Logger) datatasking.TaskDispatcher {

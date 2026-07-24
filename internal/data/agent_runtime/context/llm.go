@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/tmc/langchaingo/llms"
+	lmm "kratos-demo/internal/biz/llm"
 )
 
-func TurnsFromLLM(messages []llms.MessageContent) []ConversationTurn {
+func TurnsFromLLM(messages []lmm.MessageContent) []ConversationTurn {
 	turns := make([]ConversationTurn, 0, len(messages))
 	for _, msg := range messages {
 		switch msg.Role {
-		case llms.ChatMessageTypeSystem:
+		case lmm.RoleSystem:
 			continue
-		case llms.ChatMessageTypeHuman:
+		case lmm.RoleUser:
 			content := textFromParts(msg.Parts)
 			if content == "" {
 				continue
@@ -22,18 +22,18 @@ func TurnsFromLLM(messages []llms.MessageContent) []ConversationTurn {
 				Role:    ConversationRoleHuman,
 				Content: content,
 			})
-		case llms.ChatMessageTypeAI:
+		case lmm.RoleAssistant:
 			turn := ConversationTurn{Role: ConversationRoleAI}
 			for _, part := range msg.Parts {
 				switch typed := part.(type) {
-				case llms.TextContent:
+				case lmm.TextContent:
 					if text := strings.TrimSpace(typed.Text); text != "" {
 						if turn.Content != "" {
 							turn.Content += "\n"
 						}
 						turn.Content += text
 					}
-				case llms.ToolCall:
+				case lmm.ToolCallPart:
 					call := ConversationToolCall{
 						ID:   strings.TrimSpace(typed.ID),
 						Name: "",
@@ -50,9 +50,9 @@ func TurnsFromLLM(messages []llms.MessageContent) []ConversationTurn {
 			if turn.Content != "" || len(turn.ToolCalls) > 0 {
 				turns = append(turns, turn)
 			}
-		case llms.ChatMessageTypeTool:
+		case lmm.RoleTool:
 			for _, part := range msg.Parts {
-				toolResp, ok := part.(llms.ToolCallResponse)
+				toolResp, ok := part.(lmm.ToolCallResponse)
 				if !ok {
 					continue
 				}
@@ -68,8 +68,8 @@ func TurnsFromLLM(messages []llms.MessageContent) []ConversationTurn {
 	return turns
 }
 
-func LLMMessagesFromTurns(turns []ConversationTurn) []llms.MessageContent {
-	messages := make([]llms.MessageContent, 0, len(turns))
+func LLMMessagesFromTurns(turns []ConversationTurn) []lmm.MessageContent {
+	messages := make([]lmm.MessageContent, 0, len(turns))
 	for _, turn := range turns {
 		switch turn.Role {
 		case ConversationRoleHuman:
@@ -77,16 +77,16 @@ func LLMMessagesFromTurns(turns []ConversationTurn) []llms.MessageContent {
 			if content == "" {
 				continue
 			}
-			messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, content))
+			messages = append(messages, lmm.TextParts(lmm.RoleUser, content))
 		case ConversationRoleAI:
-			parts := make([]llms.ContentPart, 0, len(turn.ToolCalls)+1)
+			parts := make([]lmm.ContentPart, 0, len(turn.ToolCalls)+1)
 			if content := strings.TrimSpace(turn.Content); content != "" {
-				parts = append(parts, llms.TextContent{Text: content})
+				parts = append(parts, lmm.TextContent{Text: content})
 			}
 			for idx, call := range turn.ToolCalls {
-				parts = append(parts, NormalizeLLMToolCall(llms.ToolCall{
+				parts = append(parts, NormalizeLLMToolCall(lmm.ToolCallPart{
 					ID: ensureToolCallID(call.ID, call.Name, idx),
-					FunctionCall: &llms.FunctionCall{
+					FunctionCall: &lmm.FunctionCall{
 						Name:      call.Name,
 						Arguments: call.Arguments,
 					},
@@ -95,8 +95,8 @@ func LLMMessagesFromTurns(turns []ConversationTurn) []llms.MessageContent {
 			if len(parts) == 0 {
 				continue
 			}
-			messages = append(messages, llms.MessageContent{
-				Role:  llms.ChatMessageTypeAI,
+			messages = append(messages, lmm.MessageContent{
+				Role:  lmm.RoleAssistant,
 				Parts: parts,
 			})
 		case ConversationRoleTool:
@@ -109,9 +109,9 @@ func LLMMessagesFromTurns(turns []ConversationTurn) []llms.MessageContent {
 			if toolCallID == "" {
 				toolCallID = ensureToolCallID("", name, 0)
 			}
-			messages = append(messages, llms.MessageContent{
-				Role: llms.ChatMessageTypeTool,
-				Parts: []llms.ContentPart{llms.ToolCallResponse{
+			messages = append(messages, lmm.MessageContent{
+				Role: lmm.RoleTool,
+				Parts: []lmm.ContentPart{lmm.ToolCallResponse{
 					ToolCallID: toolCallID,
 					Name:       name,
 					Content:    content,
@@ -122,10 +122,10 @@ func LLMMessagesFromTurns(turns []ConversationTurn) []llms.MessageContent {
 	return messages
 }
 
-func textFromParts(parts []llms.ContentPart) string {
+func textFromParts(parts []lmm.ContentPart) string {
 	var builder strings.Builder
 	for _, part := range parts {
-		text, ok := part.(llms.TextContent)
+		text, ok := part.(lmm.TextContent)
 		if !ok {
 			continue
 		}
@@ -139,7 +139,7 @@ func textFromParts(parts []llms.ContentPart) string {
 	return builder.String()
 }
 
-func NormalizeLLMToolCall(call llms.ToolCall) llms.ToolCall {
+func NormalizeLLMToolCall(call lmm.ToolCallPart) lmm.ToolCallPart {
 	if strings.TrimSpace(call.Type) == "" {
 		call.Type = "function"
 	}
@@ -163,9 +163,9 @@ func ensureToolCallID(id, toolName string, index int) string {
 	return fmt.Sprintf("call-%s-%d", toolName, index)
 }
 
-func BuildLLMMessages(systemText string, turns []ConversationTurn) []llms.MessageContent {
-	messages := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeSystem, strings.TrimSpace(systemText)),
+func BuildLLMMessages(systemText string, turns []ConversationTurn) []lmm.MessageContent {
+	messages := []lmm.MessageContent{
+		lmm.TextParts(lmm.RoleSystem, strings.TrimSpace(systemText)),
 	}
 	messages = append(messages, LLMMessagesFromTurns(turns)...)
 	return messages
