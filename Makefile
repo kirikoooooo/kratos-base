@@ -66,16 +66,14 @@ build-win:
 release-win: build-win
 	@mkdir -p $(DIST_WIN)/configs
 	cp $(BIN_WIN) $(DIST_WIN)/$(RELEASE_NAME).exe
-	cp configs/config.yaml $(DIST_WIN)/configs/config.yaml
-	cp -R configs/casbin $(DIST_WIN)/configs/casbin
+	@echo "configs/ is generated on the first run"
 	@echo "release ready: $(DIST_WIN)/"
 	@echo "  $(RELEASE_NAME).exe -cli"
 
 release-mac: build-bin
 	@mkdir -p $(DIST_MAC)/configs
 	cp $(BIN) $(DIST_MAC)/$(RELEASE_NAME)
-	cp configs/config.yaml $(DIST_MAC)/configs/config.yaml
-	cp -R configs/casbin $(DIST_MAC)/configs/casbin
+	@echo "configs/ is generated on the first run"
 	@echo "release ready: $(DIST_MAC)/"
 	@echo "  ./$(RELEASE_NAME) -cli"
 

@@ -1,1 +1,9 @@
 .myagent/
+
+# Local runtime configuration and access policies may contain environment-specific settings.
+configs/
+
+# Development machine artifacts.
+.DS_Store
+__pycache__/
+*.py[cod]
