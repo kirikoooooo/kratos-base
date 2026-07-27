@@ -83,3 +83,105 @@ CLI / Dashboard
 - Mailbox 是有界非阻塞投递；调用方必须处理 `ErrMailOverflow`。
 - `rootSystem` 是进程全局单例；测试会重置它，生产中不可重复调用全局 `Stop` 后继续注册。
 - 同步调用固定 3 秒超时，未与上层 `context.Context` 联动；耗时 Agent 任务不应依赖该路径作为取消机制。
+
+## 项目中的 Agent 运行与多 Agent 交互
+
+### 先区分三种边界
+
+项目当前的 `default`、`router`、`coder`、`reviewer` 是同一 `langChainAgentRuntime` 中按 Prompt 和工具集区分的逻辑角色，不是默认一角色一进程，也不是默认一角色一 Actor。Actor 负责串行化进入本地运行时的顶层任务；Router 对本地子 Agent 的委派则直接调用同一运行时的 `ReceiveTask`。只有为目标角色配置了 `runtime.remotes` 时，子任务才会通过 gRPC 发往远端进程。
+
+| 交互类型 | 发送方与接收方 | 协议 / 载体 | 是否跨进程 | 当前处理方式 |
+| --- | --- | --- | --- | --- |
+| 外部任务提交 | HTTP/gRPC 客户端 -> `TaskService` | HTTP `POST /api/v1/tasks` 或 gRPC `TaskService.CreateTask` | 可跨进程 | 创建内存任务后异步交给 `TaskDispatcher`。 |
+| 顶层任务执行 | `TaskDispatcher` -> 本地 Runtime | `actor.Message`，同步 `SyncRequest` | 否 | 消息 `Data` 为 `*TaskCommand`，投递至 `langchain-runtime:9001` 的 mailbox。 |
+| 本地角色委派 | Router/Coder -> 同一 Runtime | 函数调用 `ReceiveTask` | 否 | 复用当前 `context` 与 `task_id`，按目标角色切换 Prompt/工具集后执行。 |
+| 远端角色委派 | Router/Coder -> 远端 Runtime | gRPC unary `AgentRuntimeService.ExecuteTask` | 是 | 根据 `runtime.remotes[].agent` 匹配目标，连接 `target` 后发送 protobuf `TaskCommand`。 |
+| 结果和进度回传 | Runtime -> 调度器 / Dashboard / CLI | Actor 响应、内存 Trace、SSE | 进度 SSE 可供其他进程订阅 | 顶层结果返回 `TaskResult`；过程事件写入 Trace，再由 SSE 推送。 |
+
+### 顶层任务：HTTP/gRPC 到 Actor Runtime
+
+```text
+POST /api/v1/tasks 或 TaskService.CreateTask
+  -> TaskUsecase.Create
+       保存 Task{pending}
+       -> TaskDispatcher.Dispatch（启动后台 goroutine，立即返回 pending 任务）
+  -> TaskDispatcher.handle
+       pending -> running，初始化 Memory / Trace / Plan
+       -> runtime.SendTask(TaskCommand)
+            -> actor.SyncRequest(nil, langchain-runtime:9001, Message{Id: 1001, Data: *TaskCommand})
+            -> langChainAgentRuntime.Process
+                 -> ReceiveTask -> Execute(按 agent 选择角色流程)
+                 -> Message.Response(RespMessage{Data: *TaskResult, Err: ...})
+       -> done 或 failed，持久化 Task 并更新 Trace
+```
+
+Actor 消息体并不是网络协议：`Message.Data` 是进程内 Go 指针 `*taskv1.TaskCommand`。本链路中 `Message.Id` 固定为 `1001`，业务并未按该 ID 做分发；`from` 为空 PID，响应经同步 `respCh` 回到 `SendTask` 的等待 goroutine。由于 Actor mailbox 串行消费，多个顶层任务虽然各自有调度 goroutine，仍会在同一个 Runtime mailbox 中排队执行。
+
+### 进程间委派协议
+
+远端委派配置的最小形式如下；未配置匹配项时不会拨号，而是走前述本地直接调用。
+
+```yaml
+runtime:
+  remotes:
+    - agent: coder
+      target: 127.0.0.1:9001
+      timeout: 8
+```
+
+通信契约定义在 `api/task/v1/task.proto`，是 unary gRPC：
+
+| RPC / 消息 | 字段 | 语义 |
+| --- | --- | --- |
+| `AgentRuntimeService.ExecuteTask` 请求 | `TaskCommand.taskID` | 根任务 / 会话 ID；子任务沿用父任务 ID，使 Memory 与 Trace 可以归集到同一会话。 |
+|  | `TaskCommand.agent` | 目标逻辑角色，例如 `coder` 或 `reviewer`。 |
+|  | `TaskCommand.prompt` | 委派给子 Agent 的完整任务文本。 |
+| `AgentRuntimeService.ExecuteTask` 响应 | `TaskResult.summary` | 子任务摘要，供调用 Agent 继续推理。 |
+|  | `TaskResult.output` | 子任务正文；调用方将它格式化为 tool result，再交回 Router/Coder 的模型上下文。 |
+| gRPC status | `error` | 拨号、超时或远端执行失败；调用方记录失败事件并把错误返回给发起委派的工具调用。 |
+
+调用端在 `executeRemoteTask` 中分别为拨号和 RPC 调用创建带超时的 `context`，使用 `insecure.NewCredentials()` 建立 gRPC 连接。也就是说，当前远端 Agent 通道没有 TLS、认证、重试、流式传输或消息队列语义；`timeout` 到期会让调用方返回错误，但不保证远端已停止执行，远端应额外实现幂等、取消和鉴权后再用于不可信网络。
+
+远端进程通过同一 `AgentRuntimeService` 注册服务，收到请求后直接调用 `runtime.ReceiveTask(ctx, cmd)`；它没有经过发送方进程的 Actor mailbox。因此远端并发度由远端 Runtime 自身实现决定，而不是由发送方的本地 Actor mailbox 控制。
+
+### 角色之间如何交互
+
+`router` 的函数调用工具集暴露 `coder_agent` 与 `reviewer_agent`；`coder` 还可调用 `router_agent` 与 `reviewer_agent`。模型决定是否调用这些工具，工具 Handler 随后调用 `dispatchSubTask`：优先远端配置，否则在本地执行。`reviewer` 当前是纯 LLM 角色，不向其他 Agent 暴露委派工具。
+
+```text
+Router LLM
+  -> function call: coder_agent(prompt)
+  -> dispatchSubTask(coder, prompt)
+       -> remote configured ? gRPC ExecuteTask : local ReceiveTask
+  -> TaskResult(summary, output)
+  -> formatTaskResult
+  -> 作为 tool result 注入 Router 的下一轮 LLM 上下文
+  -> Router 继续调用 reviewer_agent 或输出最终答复
+```
+
+因此角色交互的业务内容是 `TaskCommand` 和 `TaskResult`，而不是 Actor 的 `Message` 本身。Actor 只承担顶层进程内请求/响应；本地委派是同步函数调用；跨进程委派才使用 protobuf/gRPC。
+
+### 状态、可观测性与交互接口
+
+顶层 `Task` 的状态机为 `pending -> running -> done | failed`。任务记录目前使用带锁的内存仓库，进程重启后不会恢复；`CreateTask` 返回时通常仍为 `pending`，调用方应通过查询接口或事件流观察最终状态。子任务没有独立 `Task` 实体和独立状态机，它们以父 `task_id` 的 Trace 事件记录委派、远端执行成功或失败。
+
+| 接口 | 用途 | 返回 / 事件内容 |
+| --- | --- | --- |
+| `POST /api/v1/tasks` | 创建顶层任务 | `TaskReply`：`task_id`、角色、Prompt、状态、结果、错误、创建/更新时间。 |
+| `GET /api/v1/tasks/{taskID}` | 查询顶层任务 | 同上；用于轮询 `pending/running/done/failed`。 |
+| gRPC `TaskService.CreateTask` / `GetTask` | HTTP 接口的 RPC 等价物 | `TaskReply`。 |
+| gRPC `AgentRuntimeService.ExecuteTask` | 远端 Agent 执行子任务 | `TaskCommand -> TaskResult`；不创建顶层 `Task`。 |
+| `POST /debug/a2a/message` | Dashboard 向已启动角色发送会话消息 | 同步返回 `task_id`、`TaskResult` 与会话快照。 |
+| `POST /debug/a2a/verify` | 验证 Router 到指定角色的委派链路 | 同步返回验证子任务的结果与 Trace 会话。 |
+| `GET /debug/a2a/events?task_id=...` | Dashboard SSE | `trace.event`，含阶段、角色、目标地址、Prompt 摘要、工具输入输出、错误、耗时、模型和 token 信息。 |
+| `GET /debug/cli/stream?session_id=...` | CLI 可选 SSE 输出 | CLI 回合开始、进度、完成或失败事件。 |
+
+Trace 会话在内存中最多保留 32 个，事件会驱动计划步骤更新。例如 `delegate_local`、`delegate_remote` 表示委派开始，`remote_execute_done` 或 `remote_execute_failed` 表示远端结果，`task_done` / `task_failed` 表示顶层任务终态。Dashboard 和 CLI 通过订阅该 Trace 读取进度；它们不是 Agent 之间的命令通道。
+
+### 当前限制
+
+- 当前只有一个本地 Runtime Actor，角色并行和并发子任务尚未实现；本地委派会在当前调用栈内同步运行。
+- Router 与 Coder 都可能互相委派；没有循环检测或最大委派深度，Prompt 和模型策略需要避免递归调用。
+- 顶层 Actor `SyncRequest` 的固定等待上限是 3 秒，而远端 gRPC 默认超时来自 `runtime.remotes[].timeout`；二者未统一，也未形成端到端取消协议。
+- 任务、Trace 与 Dashboard 状态均以进程内存为主；没有跨进程共享的任务存储、去重、断点恢复或可靠投递。
+- 远端通道默认明文 gRPC；部署到非受信任网络前，应补充 mTLS/认证、授权、审计、请求大小限制与幂等任务 ID。

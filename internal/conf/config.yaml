@@ -1,0 +1,28 @@
+server:
+  http:
+    network: tcp
+    addr: 0.0.0.0:8000
+    timeout: 1
+  grpc:
+    network: tcp
+    addr: 0.0.0.0:9000
+    timeout: 1
+data:
+  database:
+    driver: memory
+    source: demo
+  agent_memory:
+    dir: .myagent
+    user_id: default
+    context_compress_threshold: 200000
+    keep_recent_turns: 24
+    tool_output_max_chars: 8000
+ai:
+  openai:
+    model: gpt-5.4-mini
+    timeout_seconds: 180
+runtime:
+  remotes:
+    - agent: coder
+      target: 127.0.0.1:9001
+      timeout: 8

@@ -2,36 +2,28 @@ package mcp
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	protocol "github.com/mark3labs/mcp-go/mcp"
 )
 
-func TestDecodeToolsListCreatesLLMTools(t *testing.T) {
-	raw := []byte(`{"tools":[{"name":"rag_search","description":"Search indexed documents","inputSchema":{"type":"object","properties":{"query":{"type":"string"}},"required":["query"]}}]}`)
-
-	tools, err := decodeToolsList(raw)
-	if err != nil {
-		t.Fatalf("decodeToolsList() error = %v", err)
-	}
-	if len(tools) != 1 || tools[0].Function == nil || tools[0].Function.Name != "rag_search" {
-		t.Fatalf("decodeToolsList() = %#v, want rag_search tool", tools)
-	}
-}
-
-func TestDecodeToolCallReturnsTextAndError(t *testing.T) {
-	raw, err := json.Marshal(map[string]any{
-		"content": []map[string]any{{"type": "text", "text": "two matches"}},
-		"isError": false,
+func TestFormatToolResultReturnsTextAndError(t *testing.T) {
+	output, err := formatToolResult(&protocol.CallToolResult{
+		Content: []protocol.Content{protocol.TextContent{Type: "text", Text: "two matches"}},
 	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	output, err := decodeToolCall(raw)
 	if err != nil || output != "two matches" {
-		t.Fatalf("decodeToolCall() = (%q, %v), want (two matches, nil)", output, err)
+		t.Fatalf("formatToolResult() = (%q, %v), want (two matches, nil)", output, err)
+	}
+
+	output, err = formatToolResult(&protocol.CallToolResult{
+		Content: []protocol.Content{protocol.TextContent{Type: "text", Text: "tool failed"}},
+		IsError: true,
+	})
+	if err == nil || output != "tool failed" {
+		t.Fatalf("formatToolResult() = (%q, %v), want (tool failed, error)", output, err)
 	}
 }
 

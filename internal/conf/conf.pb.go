@@ -1405,8 +1405,10 @@ type Runtime_Daytona struct {
 	Snapshot string `protobuf:"bytes,5,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
 	// Sandbox lifetime; 0 asks Daytona to delete the sandbox immediately after it stops.
 	AutoDeleteMinutes int64 `protobuf:"varint,6,opt,name=auto_delete_minutes,json=autoDeleteMinutes,proto3" json:"auto_delete_minutes,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// Optional plaintext key for local configuration. Prefer api_key_env in shared environments.
+	ApiKey        string `protobuf:"bytes,7,opt,name=api_key,json=apiKey,proto3" json:"api_key,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Runtime_Daytona) Reset() {
@@ -1479,6 +1481,13 @@ func (x *Runtime_Daytona) GetAutoDeleteMinutes() int64 {
 		return x.AutoDeleteMinutes
 	}
 	return 0
+}
+
+func (x *Runtime_Daytona) GetApiKey() string {
+	if x != nil {
+		return x.ApiKey
+	}
+	return ""
 }
 
 type Runtime_MCPServer struct {
@@ -1780,19 +1789,20 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\auser_id\x18\x02 \x01(\tR\x06userId\x12<\n" +
 	"\x1acontext_compress_threshold\x18\x03 \x01(\x03R\x18contextCompressThreshold\x12*\n" +
 	"\x11keep_recent_turns\x18\x04 \x01(\x05R\x0fkeepRecentTurns\x121\n" +
-	"\x15tool_output_max_chars\x18\x05 \x01(\x05R\x12toolOutputMaxChars\"\xc2\x05\n" +
+	"\x15tool_output_max_chars\x18\x05 \x01(\x05R\x12toolOutputMaxChars\"\xdb\x05\n" +
 	"\aRuntime\x129\n" +
 	"\aremotes\x18\x01 \x03(\v2\x1f.kratos.api.Runtime.RemoteAgentR\aremotes\x12>\n" +
 	"\vmcp_servers\x18\x02 \x03(\v2\x1d.kratos.api.Runtime.MCPServerR\n" +
 	"mcpServers\x125\n" +
-	"\adaytona\x18\x03 \x01(\v2\x1b.kratos.api.Runtime.DaytonaR\adaytona\x1a\xc0\x01\n" +
+	"\adaytona\x18\x03 \x01(\v2\x1b.kratos.api.Runtime.DaytonaR\adaytona\x1a\xd9\x01\n" +
 	"\aDaytona\x12\x18\n" +
 	"\aenabled\x18\x01 \x01(\bR\aenabled\x12\x1e\n" +
 	"\vapi_key_env\x18\x02 \x01(\tR\tapiKeyEnv\x12\x17\n" +
 	"\aapi_url\x18\x03 \x01(\tR\x06apiUrl\x12\x16\n" +
 	"\x06target\x18\x04 \x01(\tR\x06target\x12\x1a\n" +
 	"\bsnapshot\x18\x05 \x01(\tR\bsnapshot\x12.\n" +
-	"\x13auto_delete_minutes\x18\x06 \x01(\x03R\x11autoDeleteMinutes\x1a\xea\x01\n" +
+	"\x13auto_delete_minutes\x18\x06 \x01(\x03R\x11autoDeleteMinutes\x12\x17\n" +
+	"\aapi_key\x18\a \x01(\tR\x06apiKey\x1a\xea\x01\n" +
 	"\tMCPServer\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12\x12\n" +

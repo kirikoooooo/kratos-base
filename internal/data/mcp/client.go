@@ -1,20 +1,20 @@
-// Package mcp provides a small stdio JSON-RPC client for MCP tool servers.
+// Package mcp adapts MCP servers to the Agent's LLM tool interface.
 package mcp
 
 import (
-	"bufio"
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
+
+	mcpclient "github.com/mark3labs/mcp-go/client"
+	"github.com/mark3labs/mcp-go/client/transport"
+	protocol "github.com/mark3labs/mcp-go/mcp"
 
 	"kratos-demo/internal/conf"
 
@@ -31,12 +31,7 @@ type Config struct {
 
 type Client struct {
 	config Config
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	output *bufio.Reader
-	stderr *bytes.Buffer
-	mu     sync.Mutex
-	nextID int64
+	client *mcpclient.Client
 	tools  []lmm.Tool
 }
 
@@ -60,7 +55,6 @@ func NewClients(ctx context.Context, servers []*conf.Runtime_MCPServer) ([]*Clie
 			}
 			return nil, nil, fmt.Errorf("connect MCP server %s: %w", server.GetName(), err)
 		}
-		client.tools = discovered
 		clients = append(clients, client)
 		tools = append(tools, discovered...)
 	}
@@ -76,45 +70,34 @@ func NewClient(ctx context.Context, config Config) (*Client, []lmm.Tool, error) 
 	if config.Timeout <= 0 {
 		config.Timeout = 30 * time.Second
 	}
-	cmd := exec.Command(config.Command, config.Args...)
-	cmd.Dir = workspaceRoot()
-	cmd.Env = append(os.Environ(), config.Env...)
-	stderr := &bytes.Buffer{}
-	cmd.Stderr = stderr
-	stdin, err := cmd.StdinPipe()
+
+	// The library owns MCP framing while this factory preserves our workspace cwd.
+	commandFunc := func(ctx context.Context, command string, env []string, args []string) (*exec.Cmd, error) {
+		cmd := exec.CommandContext(ctx, command, args...)
+		cmd.Dir = workspaceRoot()
+		cmd.Env = append(os.Environ(), env...)
+		return cmd, nil
+	}
+	client, err := mcpclient.NewStdioMCPClientWithOptions(
+		config.Command,
+		config.Env,
+		config.Args,
+		transport.WithCommandFunc(commandFunc),
+	)
 	if err != nil {
-		return nil, nil, fmt.Errorf("mcp stdin: %w", err)
+		return nil, nil, fmt.Errorf("start MCP stdio client: %w", err)
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, nil, fmt.Errorf("mcp stdout: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, nil, fmt.Errorf("start mcp server: %w", err)
-	}
-	c := &Client{config: config, cmd: cmd, stdin: stdin, output: bufio.NewReader(stdout), stderr: stderr}
-	if _, err := c.request(ctx, "initialize", map[string]any{
-		"protocolVersion": "2024-11-05",
-		"capabilities":    map[string]any{},
-		"clientInfo":      map[string]string{"name": "kratos-demo", "version": "0.1.0"},
-	}); err != nil {
+	c := &Client{config: config, client: client}
+	if err := c.initialize(ctx); err != nil {
 		c.Close()
 		return nil, nil, err
 	}
-	if err := c.notify("notifications/initialized", map[string]any{}); err != nil {
-		c.Close()
-		return nil, nil, err
-	}
-	raw, err := c.request(ctx, "tools/list", map[string]any{})
+	tools, err := c.listTools(ctx)
 	if err != nil {
 		c.Close()
 		return nil, nil, err
 	}
-	tools, err := decodeToolsList(raw)
-	if err != nil {
-		c.Close()
-		return nil, nil, err
-	}
+	c.tools = tools
 	return c, tools, nil
 }
 
@@ -135,6 +118,43 @@ func workspaceRoot() string {
 	}
 }
 
+func (c *Client) initialize(ctx context.Context) error {
+	ctx, cancel := c.withTimeout(ctx)
+	defer cancel()
+	request := protocol.InitializeRequest{}
+	request.Params.ProtocolVersion = protocol.LATEST_PROTOCOL_VERSION
+	request.Params.ClientInfo = protocol.Implementation{Name: "kratos-demo", Version: "0.1.0"}
+	if _, err := c.client.Initialize(ctx, request); err != nil {
+		return fmt.Errorf("initialize MCP server: %w", err)
+	}
+	return nil
+}
+
+func (c *Client) listTools(ctx context.Context) ([]lmm.Tool, error) {
+	ctx, cancel := c.withTimeout(ctx)
+	defer cancel()
+	result, err := c.client.ListTools(ctx, protocol.ListToolsRequest{})
+	if err != nil {
+		return nil, fmt.Errorf("list MCP tools: %w", err)
+	}
+	tools := make([]lmm.Tool, 0, len(result.Tools))
+	for _, tool := range result.Tools {
+		if strings.TrimSpace(tool.Name) == "" {
+			return nil, errors.New("mcp tool missing name")
+		}
+		schema, err := json.Marshal(tool.InputSchema)
+		if err != nil {
+			return nil, fmt.Errorf("encode schema for MCP tool %s: %w", tool.Name, err)
+		}
+		var parameters any
+		if err := json.Unmarshal(schema, &parameters); err != nil {
+			return nil, fmt.Errorf("decode schema for MCP tool %s: %w", tool.Name, err)
+		}
+		tools = append(tools, lmm.Tool{Type: "function", Function: &lmm.FunctionDefinition{Name: tool.Name, Description: tool.Description, Parameters: parameters}})
+	}
+	return tools, nil
+}
+
 func (c *Client) Call(ctx context.Context, name, input string) (string, error) {
 	args := map[string]any{}
 	input = strings.TrimSpace(input)
@@ -143,144 +163,46 @@ func (c *Client) Call(ctx context.Context, name, input string) (string, error) {
 			args["query"] = input
 		}
 	}
-	raw, err := c.request(ctx, "tools/call", map[string]any{"name": name, "arguments": args})
+	ctx, cancel := c.withTimeout(ctx)
+	defer cancel()
+	request := protocol.CallToolRequest{}
+	request.Params.Name = name
+	request.Params.Arguments = args
+	result, err := c.client.CallTool(ctx, request)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("call MCP tool %s: %w", name, err)
 	}
-	return decodeToolCall(raw)
+	return formatToolResult(result)
+}
+
+func (c *Client) withTimeout(ctx context.Context) (context.Context, context.CancelFunc) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	return context.WithTimeout(ctx, c.config.Timeout)
 }
 
 func (c *Client) Close() {
-	if c == nil {
-		return
-	}
-	_ = c.stdin.Close()
-	if c.cmd != nil && c.cmd.Process != nil {
-		_ = c.cmd.Process.Kill()
-	}
-	if c.cmd != nil {
-		_ = c.cmd.Wait()
+	if c != nil && c.client != nil {
+		_ = c.client.Close()
 	}
 }
 
-func (c *Client) request(ctx context.Context, method string, params any) (json.RawMessage, error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	ctx, cancel := context.WithTimeout(ctx, c.config.Timeout)
-	defer cancel()
-	c.nextID++
-	id := c.nextID
-	if err := c.write(map[string]any{"jsonrpc": "2.0", "id": id, "method": method, "params": params}); err != nil {
-		return nil, err
+func formatToolResult(result *protocol.CallToolResult) (string, error) {
+	if result == nil {
+		return "", errors.New("MCP tool returned no result")
 	}
-	type response struct {
-		ID     int64           `json:"id"`
-		Result json.RawMessage `json:"result"`
-		Error  *struct {
-			Message string `json:"message"`
-		} `json:"error"`
-	}
-	result := make(chan struct {
-		raw json.RawMessage
-		err error
-	}, 1)
-	go func() {
-		for {
-			line, err := c.output.ReadBytes('\n')
-			if err != nil {
-				if c.stderr != nil && c.stderr.Len() > 0 {
-					err = fmt.Errorf("%w: %s", err, strings.TrimSpace(c.stderr.String()))
-				}
-				result <- struct {
-					raw json.RawMessage
-					err error
-				}{err: err}
-				return
-			}
-			var r response
-			if err := json.Unmarshal(line, &r); err != nil {
-				continue
-			}
-			if r.ID != id {
-				continue
-			}
-			if r.Error != nil {
-				result <- struct {
-					raw json.RawMessage
-					err error
-				}{err: errors.New(r.Error.Message)}
-				return
-			}
-			result <- struct {
-				raw json.RawMessage
-				err error
-			}{raw: r.Result}
-			return
-		}
-	}()
-	select {
-	case r := <-result:
-		if r.err != nil {
-			return nil, fmt.Errorf("mcp %s: %w", method, r.err)
-		}
-		return r.raw, nil
-	case <-ctx.Done():
-		return nil, fmt.Errorf("mcp %s: %w", method, ctx.Err())
-	}
-}
-
-func (c *Client) notify(method string, params any) error {
-	return c.write(map[string]any{"jsonrpc": "2.0", "method": method, "params": params})
-}
-func (c *Client) write(payload any) error {
-	raw, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	_, err = c.stdin.Write(append(raw, '\n'))
-	return err
-}
-
-func decodeToolsList(raw []byte) ([]lmm.Tool, error) {
-	var response struct {
-		Tools []struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
-			InputSchema any    `json:"inputSchema"`
-		} `json:"tools"`
-	}
-	if err := json.Unmarshal(raw, &response); err != nil {
-		return nil, fmt.Errorf("decode mcp tools/list: %w", err)
-	}
-	tools := make([]lmm.Tool, 0, len(response.Tools))
-	for _, tool := range response.Tools {
-		if strings.TrimSpace(tool.Name) == "" || tool.InputSchema == nil {
-			return nil, errors.New("mcp tool missing name or inputSchema")
-		}
-		tools = append(tools, lmm.Tool{Type: "function", Function: &lmm.FunctionDefinition{Name: tool.Name, Description: tool.Description, Parameters: tool.InputSchema}})
-	}
-	return tools, nil
-}
-
-func decodeToolCall(raw []byte) (string, error) {
-	var response struct {
-		Content []struct {
-			Type string `json:"type"`
-			Text string `json:"text"`
-		} `json:"content"`
-		IsError bool `json:"isError"`
-	}
-	if err := json.Unmarshal(raw, &response); err != nil {
-		return "", fmt.Errorf("decode mcp tools/call: %w", err)
-	}
-	parts := make([]string, 0, len(response.Content))
-	for _, part := range response.Content {
-		if part.Type == "text" {
-			parts = append(parts, part.Text)
+	parts := make([]string, 0, len(result.Content))
+	for _, content := range result.Content {
+		if text, ok := content.(protocol.TextContent); ok {
+			parts = append(parts, text.Text)
 		}
 	}
 	output := strings.Join(parts, "\n")
-	if response.IsError {
+	if result.IsError {
+		if output == "" {
+			output = "MCP tool returned an error"
+		}
 		return output, errors.New(output)
 	}
 	return output, nil

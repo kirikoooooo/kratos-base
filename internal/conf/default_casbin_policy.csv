@@ -32,5 +32,8 @@ p, developer, tool.exec_command, *, go vet ./...
 p, developer, tool.exec_command, *, make proto
 p, developer, tool.exec_command, *, make test
 
+p, analyst, tool.daytona_data_analysis, *, *
+
 # g, principal, role
 g, local-dev, developer
+g, local-dev, analyst

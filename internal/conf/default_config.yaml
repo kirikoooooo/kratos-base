@@ -51,7 +51,8 @@ security:
   casbin_policy_file: casbin/policy.csv
 runtime:
   daytona:
-    enabled: false
+    enabled: true
+    # api_key: dtn_... # Optional local plaintext key; do not commit configs/.
     api_key_env: DAYTONA_API_KEY
     api_url: https://app.daytona.io/api
     snapshot: daytona-small

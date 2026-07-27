@@ -43,10 +43,6 @@ type CLIService struct {
 	permMode PermissionMode
 	permMu   sync.Mutex
 
-	// planShown tracks whether a plan_presented event was already displayed
-	// during the current turn, to suppress duplicate rendering in printResult.
-	planShown bool
-
 	aiConfig *conf.AI
 	security *conf.Security
 }
@@ -164,7 +160,6 @@ func (c *CLIService) processLogPath() string {
 }
 
 func (c *CLIService) processTurn(ctx context.Context, prompt string) {
-	c.planShown = false
 	c.publishOutput("cli.turn.started", prompt)
 	c.ui.printUserTurn(prompt)
 	if c.processLog != nil {
@@ -204,7 +199,8 @@ func (c *CLIService) processTurn(ctx context.Context, prompt string) {
 	}()
 
 	stopWatch := make(chan struct{})
-	go c.watchSessionEvents(turnCtx, c.sessionID, baseline, stopWatch)
+	watchDone := make(chan int, 1)
+	go func() { watchDone <- c.watchSessionEvents(turnCtx, c.sessionID, baseline, stopWatch) }()
 
 	sigCh := make(chan os.Signal, 2)
 	signal.Notify(sigCh, os.Interrupt)
@@ -239,17 +235,18 @@ func (c *CLIService) processTurn(ctx context.Context, prompt string) {
 			cancelTurn()
 			stopSpinner()
 			close(stopWatch)
+			<-watchDone
 			c.ui.println(c.ui.dim("  goodbye."))
 			return
 		case <-done:
 			stopSpinner()
 			close(stopWatch)
+			lastDisplayed := <-watchDone
+			c.flushNewEvents(c.sessionID, lastDisplayed)
 			goto turnDone
 		}
 	}
 turnDone:
-
-	c.flushNewEvents(c.sessionID, baseline)
 
 	if runErr != nil {
 		if errors.Is(runErr, context.Canceled) || errors.Is(turnCtx.Err(), context.Canceled) {
@@ -277,10 +274,10 @@ turnDone:
 	c.printResult(result)
 }
 
-func (c *CLIService) watchSessionEvents(ctx context.Context, sessionID string, baseline int, stop <-chan struct{}) {
+func (c *CLIService) watchSessionEvents(ctx context.Context, sessionID string, baseline int, stop <-chan struct{}) int {
 	subscriber, ok := c.trace.(datatrace.DelegationTraceSubscriber)
 	if !ok {
-		return
+		return baseline
 	}
 	ch, cancel := subscriber.Subscribe()
 	defer cancel()
@@ -290,23 +287,23 @@ func (c *CLIService) watchSessionEvents(ctx context.Context, sessionID string, b
 	for {
 		select {
 		case <-ctx.Done():
-			return
+			return lastDisplayed
 		case <-stop:
-			return
+			return lastDisplayed
 		case sessions, ok := <-ch:
 			if !ok {
-				return
+				return lastDisplayed
 			}
 			lastLogged, lastDisplayed = c.processSessionEvents(sessions, sessionID, lastLogged, lastDisplayed)
 		}
 	}
 }
 
-func (c *CLIService) flushNewEvents(sessionID string, baseline int) {
+func (c *CLIService) flushNewEvents(sessionID string, from int) {
 	if c.trace == nil {
 		return
 	}
-	_, _ = c.processSessionEvents(c.trace.ListSessions(8), sessionID, baseline, baseline)
+	_, _ = c.processSessionEvents(c.trace.ListSessions(8), sessionID, from, from)
 }
 
 func (c *CLIService) processSessionEvents(sessions []datatrace.DelegationSession, sessionID string, logFrom, displayFrom int) (logged, displayed int) {
@@ -347,7 +344,6 @@ func (c *CLIService) displayEvent(event datatrace.DelegationEvent) {
 	}
 	switch strings.TrimSpace(event.Stage) {
 	case "plan_presented":
-		c.planShown = true
 		c.ui.printPlanPresented(event)
 		return
 	}
@@ -454,16 +450,7 @@ func (c *CLIService) printResult(result interface {
 	GetOutput() string
 }) {
 	if result == nil {
-		if !c.planShown {
-			c.ui.printAssistant("router", "", "(no response)")
-		}
-		return
-	}
-	// When a plan was already displayed via plan_presented events, the same
-	// content would appear twice if we printAssistant again.  Skip the
-	// assistant header and only show a compact line when the plan was shown.
-	if c.planShown {
-		c.planShown = false
+		c.ui.printAssistant("router", "", "(no response)")
 		return
 	}
 	c.ui.printAssistant("router", result.GetSummary(), result.GetOutput())

@@ -520,7 +520,9 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 		choice := response.Choices[0]
 		output := strings.TrimSpace(choice.Content)
 		toolCalls := normalizeToolCalls(choice)
-		if output != "" {
+		// Responses without a tool call are the final answer. They are rendered by
+		// CLI printResult, so publishing them as progress would duplicate content.
+		if output != "" && len(toolCalls) > 0 {
 			r.publishAgentProgress(ctx, output, len(toolCalls) > 0)
 		}
 		if len(toolCalls) == 0 {
@@ -756,6 +758,9 @@ func (r *langChainAgentRuntime) publishAgentProgress(ctx context.Context, text s
 		return
 	}
 	stage := classifyAgentProgressStage(text, beforeTools)
+	if stage == "agent_progress" {
+		return
+	}
 	summary := firstMeaningfulLine(text)
 	r.trace.AppendEvent(datatrace.DelegationEvent{
 		Time:       time.Now(),

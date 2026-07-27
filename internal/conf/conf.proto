@@ -162,6 +162,8 @@ message Runtime {
     string snapshot = 5;
     // Sandbox lifetime; 0 asks Daytona to delete the sandbox immediately after it stops.
     int64 auto_delete_minutes = 6;
+    // Optional plaintext key for local configuration. Prefer api_key_env in shared environments.
+    string api_key = 7;
   }
 
   message MCPServer {

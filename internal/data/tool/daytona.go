@@ -39,13 +39,16 @@ func (r *ToolExecutor) daytonaDataAnalysis(ctx context.Context, input string) (s
 		return "", errors.New("output_path must be a /tmp/*.png sandbox path")
 	}
 
-	apiKeyName := r.daytona.GetApiKeyEnv()
-	if apiKeyName == "" {
-		apiKeyName = "DAYTONA_API_KEY"
-	}
-	apiKey := strings.TrimSpace(os.Getenv(apiKeyName))
+	apiKey := strings.TrimSpace(r.daytona.GetApiKey())
+	apiKeyName := strings.TrimSpace(r.daytona.GetApiKeyEnv())
 	if apiKey == "" {
-		return "", fmt.Errorf("Daytona API key is missing; export %s", apiKeyName)
+		if apiKeyName == "" {
+			apiKeyName = "DAYTONA_API_KEY"
+		}
+		apiKey = strings.TrimSpace(os.Getenv(apiKeyName))
+	}
+	if apiKey == "" {
+		return "", fmt.Errorf("Daytona API key is missing; set runtime.daytona.api_key or export %s", apiKeyName)
 	}
 	client, err := daytona.NewClientWithConfig(&daytonatypes.DaytonaConfig{
 		APIKey:      apiKey,

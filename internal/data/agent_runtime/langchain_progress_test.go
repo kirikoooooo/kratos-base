@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"context"
 	"testing"
 
 	lmm "kratos-demo/internal/biz/llm"
+	dattrace "kratos-demo/internal/data/trace"
 )
 
 func TestClassifyAgentProgressStagePlan(t *testing.T) {
@@ -17,6 +19,15 @@ func TestClassifyAgentProgressStageStep(t *testing.T) {
 	text := "✓ 步骤 1 完成：已创建 hello.ps1"
 	if stage := classifyAgentProgressStage(text, false); stage != "step_progress" {
 		t.Fatalf("stage = %q, want step_progress", stage)
+	}
+}
+
+func TestPublishAgentProgressSuppressesGenericToolPreamble(t *testing.T) {
+	trace := dattrace.NewDelegationTraceStore()
+	runtime := &langChainAgentRuntime{trace: trace}
+	runtime.publishAgentProgress(context.Background(), "## 最终结果总结\n尚待工具执行", true)
+	if sessions := trace.ListSessions(1); len(sessions) != 0 {
+		t.Fatalf("generic preamble should not be published: %+v", sessions)
 	}
 }
 

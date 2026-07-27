@@ -75,3 +75,20 @@ func TestCasbinAuthorizerAllowsConfiguredPrincipalRole(t *testing.T) {
 		t.Fatal("expected unlisted command to be denied")
 	}
 }
+
+func TestCasbinAuthorizerAllowsDaytonaAnalystRole(t *testing.T) {
+	authorizer, err := NewCasbinAuthorizer(&conf.Security{Enabled: true,
+		Principals: []*conf.Security_Principal{{Id: "local-dev", Roles: []string{"developer", "analyst"}}},
+		Roles:      []*conf.Security_Role{{Name: "analyst", Permissions: []string{"tool.daytona_data_analysis"}}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := authorizer.LocalPrincipal("local-dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := authorizer.Authorize(context.Background(), principal, bizauthz.Request{Permission: "tool.daytona_data_analysis"}); err != nil {
+		t.Fatalf("expected Daytona analyst permission: %v", err)
+	}
+}
