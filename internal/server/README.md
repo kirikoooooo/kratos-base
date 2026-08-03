@@ -3,14 +3,13 @@
 ## 当前项目结构
 
 - `http.go`：创建并配置 Kratos HTTP Server
-- `grpc.go`：创建并配置 Kratos gRPC Server
 - `server.go`：共享的应用装配示例
 
-在这个 demo 里，HTTP 和 gRPC 都在 `internal/server` 下创建，然后传给：
+在这个 demo 里，HTTP server 在 `internal/server` 下创建，然后传给：
 
 ```go
 kratos.New(
-	kratos.Server(gs, hs),
+	kratos.Server(hs),
 )
 ```
 
@@ -26,7 +25,6 @@ kratos.New(
 在当前项目中分别对应：
 
 - `github.com/go-kratos/kratos/v2/transport/http`
-- `github.com/go-kratos/kratos/v2/transport/grpc`
 
 ## 如果你要新增一个 Server
 
@@ -39,7 +37,7 @@ type Server interface {
 }
 ```
 
-如果你的自定义 server 还希望像内建 HTTP/gRPC 一样参与 transport 上下文、元信息透传等能力，就还需要遵循 Kratos transport 的相关抽象，例如 `Transporter`。
+如果你的自定义 server 还希望像内建 HTTP 一样参与 transport 上下文、元信息透传等能力，就还需要遵循 Kratos transport 的相关抽象，例如 `Transporter`。
 
 ## 新增 Server 的常见方式
 
@@ -58,7 +56,7 @@ type Server interface {
 
 ### 2. 自己实现一个新的 transport 包
 
-如果你希望行为更接近 Kratos 内建的 HTTP/gRPC，可以单独实现一个 transport 包，并让它：
+如果你希望行为更接近 Kratos 内建的 HTTP，可以单独实现一个 transport 包，并让它：
 
 - 实现 `transport.Server`
 - 按需暴露 transport 元信息
@@ -127,7 +125,6 @@ app := kratos.New(
 在这个项目里，建议这样放：
 
 - `internal/server/http.go`：内建 HTTP server
-- `internal/server/grpc.go`：内建 gRPC server
 - `internal/server/tcp.go`：自定义 TCP server
 - `internal/server/ws.go`：自定义 WebSocket server
 
@@ -142,7 +139,7 @@ app := kratos.New(
 保留多个 server，在 `kratos.Server(...)` 里决定注册哪些。
 
 ```go
-kratos.Server(gs, hs)
+kratos.Server(hs)
 kratos.Server(gs, hs, tcpSrv)
 kratos.Server(hs)
 ```
@@ -172,5 +169,4 @@ kratos.Server(hs)
 
 - Kratos transport 总览：https://go-kratos.dev/docs/component/transport/overview/
 - Kratos HTTP transport：https://go-kratos.dev/docs/component/transport/http/
-- Kratos gRPC transport：https://go-kratos.dev/docs/component/transport/grpc/
 - Kratos `transport.Server` 包文档：https://pkg.go.dev/github.com/go-kratos/kratos/v2/transport

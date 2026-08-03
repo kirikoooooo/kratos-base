@@ -54,7 +54,7 @@ func TestClientDiscoversOfficialMilvusTools(t *testing.T) {
 
 	found := false
 	for _, tool := range tools {
-		if tool.Function != nil && tool.Function.Name == "milvus_list_collections" {
+		if tool.OfFunction != nil && tool.OfFunction.Name == "milvus_list_collections" {
 			found = true
 		}
 	}

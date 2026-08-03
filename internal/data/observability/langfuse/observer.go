@@ -3,6 +3,7 @@ package langfuse
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -169,6 +170,23 @@ func (o *Observer) UpdateTask(taskID, status string, result *taskv1.TaskResult, 
 	o.log.Infof("Langfuse trace ended: task_id=%s trace_id=%s status=%s", taskID, task.span.SpanContext().TraceID(), status)
 }
 
+// SetTaskMetadata writes custom fields to the Langfuse trace metadata object.
+// Scalar values retain their OTEL type; structured values are encoded as JSON.
+func (o *Observer) SetTaskMetadata(taskID string, metadata map[string]any) {
+	if o == nil || len(metadata) == 0 {
+		return
+	}
+	o.mu.Lock()
+	task, ok := o.tasks[taskID]
+	o.mu.Unlock()
+	if !ok {
+		return
+	}
+	if attrs := metadataAttributes(metadata); len(attrs) > 0 {
+		task.span.SetAttributes(attrs...)
+	}
+}
+
 func (o *Observer) AppendEvent(event datatrace.DelegationEvent) {
 	if o == nil || strings.TrimSpace(event.TaskID) == "" {
 		return
@@ -225,6 +243,7 @@ func (o *Observer) Shutdown(ctx context.Context) error {
 
 func (noopObserver) StartTask(string, public.AgentKind, string)           {}
 func (noopObserver) UpdateTask(string, string, *taskv1.TaskResult, error) {}
+func (noopObserver) SetTaskMetadata(string, map[string]any)               {}
 func (noopObserver) AppendEvent(datatrace.DelegationEvent)                {}
 func (noopObserver) UpdatePlan(string, []datatrace.PlanStep)              {}
 func (noopObserver) UpdateContextUsage(string, datatrace.ContextUsageSnapshot, *datatrace.ContextCompressResult) {
@@ -265,6 +284,61 @@ func eventAttributes(event datatrace.DelegationEvent, kind string) []attribute.K
 		attrs = append(attrs, attribute.String("langfuse.observation.level", "ERROR"), attribute.String("langfuse.observation.status_message", limit(event.Error)))
 	}
 	return attrs
+}
+
+func metadataAttributes(metadata map[string]any) []attribute.KeyValue {
+	attrs := make([]attribute.KeyValue, 0, len(metadata))
+	for key, value := range metadata {
+		key = strings.TrimSpace(key)
+		if !validMetadataKey(key) || value == nil {
+			continue
+		}
+		attributeKey := attribute.Key("langfuse.trace.metadata." + key)
+		switch value := value.(type) {
+		case string:
+			attrs = append(attrs, attributeKey.String(limit(value)))
+		case bool:
+			attrs = append(attrs, attributeKey.Bool(value))
+		case int:
+			attrs = append(attrs, attributeKey.Int(value))
+		case int8:
+			attrs = append(attrs, attributeKey.Int(int(value)))
+		case int16:
+			attrs = append(attrs, attributeKey.Int(int(value)))
+		case int32:
+			attrs = append(attrs, attributeKey.Int64(int64(value)))
+		case int64:
+			attrs = append(attrs, attributeKey.Int64(value))
+		case uint:
+			attrs = append(attrs, attributeKey.Int64(int64(value)))
+		case uint8:
+			attrs = append(attrs, attributeKey.Int64(int64(value)))
+		case uint16:
+			attrs = append(attrs, attributeKey.Int64(int64(value)))
+		case uint32:
+			attrs = append(attrs, attributeKey.Int64(int64(value)))
+		case uint64:
+			attrs = append(attrs, attributeKey.String(limit(fmt.Sprint(value))))
+		case float32:
+			attrs = append(attrs, attributeKey.Float64(float64(value)))
+		case float64:
+			attrs = append(attrs, attributeKey.Float64(value))
+		default:
+			if raw, err := json.Marshal(value); err == nil {
+				attrs = append(attrs, attributeKey.String(limit(string(raw))))
+			}
+		}
+	}
+	return attrs
+}
+
+func validMetadataKey(key string) bool {
+	for _, r := range key {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != '-' && r != '.' {
+			return false
+		}
+	}
+	return key != ""
 }
 
 func observationType(kind string) string {

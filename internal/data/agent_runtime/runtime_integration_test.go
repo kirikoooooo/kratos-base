@@ -4,22 +4,23 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
+	"net/http/httptest"
 	"strings"
 	"testing"
-	"time"
 
 	taskv1 "kratos-demo/api/task/v1"
-	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/consts/public"
+	dataa2a "kratos-demo/internal/data/a2a"
 	datatrace "kratos-demo/internal/data/trace"
 	actorpkg "kratos-demo/third_party/actor"
 	toolcatalog "kratos-demo/third_party/tools"
 
+	"github.com/a2aproject/a2a-go/v2/a2asrv"
 	"github.com/go-kratos/kratos/v2/log"
+	"github.com/openai/openai-go/packages/param"
+	"github.com/openai/openai-go/responses"
 	lmm "kratos-demo/internal/biz/llm"
-	grpcserver "google.golang.org/grpc"
 )
 
 type scriptedToolLoopLLM struct {
@@ -178,10 +179,10 @@ func (m *alwaysFailingToolLoopLLM) Call(_ context.Context, prompt string, _ ...l
 
 func TestRunToolCallingLoopUsesToolMessages(t *testing.T) {
 	logger := log.NewStdLogger(io.Discard)
-	runtime := &langChainAgentRuntime{log: log.NewHelper(logger)}
+	runtime := &agentRuntime{log: log.NewHelper(logger)}
 	model := &scriptedToolLoopLLM{}
 	toolset := &managedToolset{
-		Tools: []lmm.Tool{{Type: "function", Function: &lmm.FunctionDefinition{Name: "read_file"}}},
+		Tools: []lmm.Tool{{OfFunction: &responses.FunctionToolParam{Name: "read_file", Parameters: map[string]any{"type": "object"}, Strict: param.NewOpt(false)}}},
 		Handlers: map[string]toolcatalog.Handler{
 			"read_file": func(_ context.Context, input string) (string, error) {
 				return "path: " + input + "\n1: phase one goal", nil
@@ -203,10 +204,10 @@ func TestRunToolCallingLoopUsesToolMessages(t *testing.T) {
 
 func TestRunToolCallingLoopSelfCorrectsToolFailure(t *testing.T) {
 	logger := log.NewStdLogger(io.Discard)
-	runtime := &langChainAgentRuntime{log: log.NewHelper(logger)}
+	runtime := &agentRuntime{log: log.NewHelper(logger)}
 	model := &selfCorrectingToolLoopLLM{}
 	toolset := &managedToolset{
-		Tools: []lmm.Tool{{Type: "function", Function: &lmm.FunctionDefinition{Name: "read_file"}}},
+		Tools: []lmm.Tool{{OfFunction: &responses.FunctionToolParam{Name: "read_file", Parameters: map[string]any{"type": "object"}, Strict: param.NewOpt(false)}}},
 		Handlers: map[string]toolcatalog.Handler{
 			"read_file": func(_ context.Context, input string) (string, error) {
 				if input == "configs/app.yml" {
@@ -234,10 +235,10 @@ func TestRunToolCallingLoopSelfCorrectsToolFailure(t *testing.T) {
 
 func TestRunToolCallingLoopFailsAfterFiveCorrectionRounds(t *testing.T) {
 	logger := log.NewStdLogger(io.Discard)
-	runtime := &langChainAgentRuntime{log: log.NewHelper(logger)}
+	runtime := &agentRuntime{log: log.NewHelper(logger)}
 	model := &alwaysFailingToolLoopLLM{}
 	toolset := &managedToolset{
-		Tools: []lmm.Tool{{Type: "function", Function: &lmm.FunctionDefinition{Name: "read_file"}}},
+		Tools: []lmm.Tool{{OfFunction: &responses.FunctionToolParam{Name: "read_file", Parameters: map[string]any{"type": "object"}, Strict: param.NewOpt(false)}}},
 		Handlers: map[string]toolcatalog.Handler{
 			"read_file": func(_ context.Context, input string) (string, error) {
 				return "", fmt.Errorf("read file %s failed: file does not exist", input)
@@ -285,59 +286,32 @@ func TestAgentRuntimeSendTaskViaActor(t *testing.T) {
 	}
 }
 
-func TestDispatchSubTaskViaRemoteGRPC(t *testing.T) {
+func TestDispatchSubTaskViaRemoteA2A(t *testing.T) {
 	WithFakeRuntimeLLM(t)
 
 	logger := log.NewStdLogger(io.Discard)
 	trace := datatrace.NewDelegationTraceStore()
 	remoteRuntime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{}, trace, nil, nil, logger)
-	remoteService := &testAgentRuntimeGRPC{runtime: remoteRuntime}
-
-	grpcSrv := grpcserver.NewServer()
-	taskv1.RegisterAgentRuntimeServiceServer(grpcSrv, remoteService)
-
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen grpc server failed: %v", err)
+	if err := actorpkg.RegisterActor(remoteRuntime, 128); err != nil {
+		t.Fatalf("register remote runtime failed: %v", err)
 	}
-	defer listener.Close()
-
-	serveDone := make(chan error, 1)
-	go func() { serveDone <- grpcSrv.Serve(listener) }()
-	defer func() {
-		grpcSrv.Stop()
-		select {
-		case err := <-serveDone:
-			if err != nil {
-				t.Fatalf("grpc server stopped with error: %v", err)
-			}
-		case <-time.After(time.Second):
-			t.Fatal("timeout waiting grpc server to stop")
-		}
-	}()
+	defer actorpkg.StopActor(remoteRuntime.PID())
+	remoteServer := httptest.NewServer(a2asrv.NewJSONRPCHandler(dataa2a.NewHandler(remoteRuntime)))
+	defer remoteServer.Close()
 
 	runtime := NewAgentRuntime(&conf.AI{}, &conf.Runtime{
 		Remotes: []*conf.Runtime_RemoteAgent{{
 			Agent:   string(public.AgentKindCoder),
-			Target:  listener.Addr().String(),
+			Target:  remoteServer.URL,
 			Timeout: 3,
 		}},
 	}, trace, nil, nil, logger)
 
-	result, err := runtime.(*langChainAgentRuntime).dispatchSubTask(context.Background(), public.AgentKindCoder, "remote implement a minimal endpoint")
+	result, err := runtime.(*agentRuntime).dispatchSubTask(context.Background(), public.AgentKindCoder, "remote implement a minimal endpoint")
 	if err != nil {
-		t.Fatalf("dispatch remote grpc sub task failed: %v", err)
+		t.Fatalf("dispatch remote A2A sub task failed: %v", err)
 	}
 	if result == nil || result.GetSummary() == "" || result.GetOutput() == "" {
 		t.Fatalf("unexpected remote task result: %+v", result)
 	}
-}
-
-type testAgentRuntimeGRPC struct {
-	taskv1.UnimplementedAgentRuntimeServiceServer
-	runtime biz.AgentRuntime
-}
-
-func (s *testAgentRuntimeGRPC) ExecuteTask(ctx context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
-	return s.runtime.ReceiveTask(ctx, cmd)
 }

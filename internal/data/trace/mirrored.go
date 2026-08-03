@@ -29,6 +29,11 @@ func (s *mirroredTraceStore) UpdateTask(taskID, status string, result *taskv1.Ta
 	s.observer.UpdateTask(taskID, status, result, err)
 }
 
+func (s *mirroredTraceStore) SetTaskMetadata(taskID string, metadata map[string]any) {
+	s.DelegationTraceStore.SetTaskMetadata(taskID, metadata)
+	s.observer.SetTaskMetadata(taskID, metadata)
+}
+
 func (s *mirroredTraceStore) AppendEvent(event DelegationEvent) {
 	s.DelegationTraceStore.AppendEvent(event)
 	s.observer.AppendEvent(event)

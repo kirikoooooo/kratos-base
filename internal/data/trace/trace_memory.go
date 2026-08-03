@@ -83,6 +83,37 @@ func (s *memoryTraceStore) UpdateTask(taskID string, status string, result *task
 	s.broadcastLocked()
 }
 
+func (s *memoryTraceStore) SetTaskMetadata(taskID string, metadata map[string]any) {
+	if strings.TrimSpace(taskID) == "" || len(metadata) == 0 {
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	session := s.ensureSessionLocked(taskID)
+	if session.Metadata == nil {
+		session.Metadata = make(map[string]any, len(metadata))
+	}
+	for key, value := range metadata {
+		key = strings.TrimSpace(key)
+		if validMetadataKey(key) && value != nil {
+			session.Metadata[key] = value
+		}
+	}
+	session.UpdatedAt = time.Now()
+	s.broadcastLocked()
+}
+
+func validMetadataKey(key string) bool {
+	for _, r := range key {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' && r != '-' && r != '.' {
+			return false
+		}
+	}
+	return key != ""
+}
+
 func (s *memoryTraceStore) AppendEvent(event DelegationEvent) {
 	if strings.TrimSpace(event.TaskID) == "" {
 		return

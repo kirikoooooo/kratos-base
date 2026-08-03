@@ -4,21 +4,12 @@ package llm
 import (
 	"context"
 	"strings"
+
+	"github.com/openai/openai-go/responses"
 )
 
-// Tool 定义一个可供模型调用的函数工具。
-type Tool struct {
-	Type     string              // 通常为 "function"
-	Function *FunctionDefinition // 函数定义
-}
-
-// FunctionDefinition 描述一个可调用函数。
-type FunctionDefinition struct {
-	Name        string // 函数名
-	Description string // 描述
-	Parameters  any    // JSON Schema 参数定义
-	Strict      bool   // 是否启用严格模式
-}
+// Tool is the official OpenAI Responses API tool union.
+type Tool = responses.ToolUnionParam
 
 // ——— ContentPart 联合类型 ———
 
@@ -78,7 +69,7 @@ type MessageContent struct {
 
 // ——— ModelClient 接口 ———
 
-// ModelClient 抽象 LLM 调用，替代 langchaingo 的 llms.Model。
+// ModelClient 抽象 LLM 调用，for model backends。
 type ModelClient interface {
 	// GenerateContent 生成回复，支持多轮对话和工具调用。
 	GenerateContent(ctx context.Context, messages []MessageContent, opts ...CallOption) (*ContentResponse, error)

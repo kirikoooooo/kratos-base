@@ -118,14 +118,7 @@ message Server {
     int64 timeout = 3;
   }
 
-  message GRPC {
-    string network = 1;
-    string addr = 2;
-    int64 timeout = 3;
-  }
-
   HTTP http = 1;
-  GRPC grpc = 2;
 }
 
 message Data {

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Fix broken string literals in langchain.go by line number."""
+"""Fix broken string literals in runtime.go by line number."""
 from __future__ import annotations
 
 import re
 from pathlib import Path
 
-PATH = Path(__file__).resolve().parents[1] / "internal/data/agent/langchain.go"
+PATH = Path(__file__).resolve().parents[1] / "internal/data/agent/runtime.go"
 
 LINE_FIXES: dict[int, str] = {
     313: '\tsystemPrompt := strings.Join([]string{',

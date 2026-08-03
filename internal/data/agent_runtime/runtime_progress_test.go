@@ -24,7 +24,7 @@ func TestClassifyAgentProgressStageStep(t *testing.T) {
 
 func TestPublishAgentProgressSuppressesGenericToolPreamble(t *testing.T) {
 	trace := dattrace.NewDelegationTraceStore()
-	runtime := &langChainAgentRuntime{trace: trace}
+	runtime := &agentRuntime{trace: trace}
 	runtime.publishAgentProgress(context.Background(), "## 最终结果总结\n尚待工具执行", true)
 	if sessions := trace.ListSessions(1); len(sessions) != 0 {
 		t.Fatalf("generic preamble should not be published: %+v", sessions)

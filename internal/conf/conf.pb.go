@@ -356,7 +356,6 @@ func (x *AI) GetOpenrouter() *AI_OpenRouter {
 type Server struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Http          *Server_HTTP           `protobuf:"bytes,1,opt,name=http,proto3" json:"http,omitempty"`
-	Grpc          *Server_GRPC           `protobuf:"bytes,2,opt,name=grpc,proto3" json:"grpc,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -394,13 +393,6 @@ func (*Server) Descriptor() ([]byte, []int) {
 func (x *Server) GetHttp() *Server_HTTP {
 	if x != nil {
 		return x.Http
-	}
-	return nil
-}
-
-func (x *Server) GetGrpc() *Server_GRPC {
-	if x != nil {
-		return x.Grpc
 	}
 	return nil
 }
@@ -1202,66 +1194,6 @@ func (x *Server_HTTP) GetTimeout() int64 {
 	return 0
 }
 
-type Server_GRPC struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Network       string                 `protobuf:"bytes,1,opt,name=network,proto3" json:"network,omitempty"`
-	Addr          string                 `protobuf:"bytes,2,opt,name=addr,proto3" json:"addr,omitempty"`
-	Timeout       int64                  `protobuf:"varint,3,opt,name=timeout,proto3" json:"timeout,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
-}
-
-func (x *Server_GRPC) Reset() {
-	*x = Server_GRPC{}
-	mi := &file_internal_conf_conf_proto_msgTypes[17]
-	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-	ms.StoreMessageInfo(mi)
-}
-
-func (x *Server_GRPC) String() string {
-	return protoimpl.X.MessageStringOf(x)
-}
-
-func (*Server_GRPC) ProtoMessage() {}
-
-func (x *Server_GRPC) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[17]
-	if x != nil {
-		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
-		if ms.LoadMessageInfo() == nil {
-			ms.StoreMessageInfo(mi)
-		}
-		return ms
-	}
-	return mi.MessageOf(x)
-}
-
-// Deprecated: Use Server_GRPC.ProtoReflect.Descriptor instead.
-func (*Server_GRPC) Descriptor() ([]byte, []int) {
-	return file_internal_conf_conf_proto_rawDescGZIP(), []int{4, 1}
-}
-
-func (x *Server_GRPC) GetNetwork() string {
-	if x != nil {
-		return x.Network
-	}
-	return ""
-}
-
-func (x *Server_GRPC) GetAddr() string {
-	if x != nil {
-		return x.Addr
-	}
-	return ""
-}
-
-func (x *Server_GRPC) GetTimeout() int64 {
-	if x != nil {
-		return x.Timeout
-	}
-	return 0
-}
-
 type Data_Database struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Driver        string                 `protobuf:"bytes,1,opt,name=driver,proto3" json:"driver,omitempty"`
@@ -1272,7 +1204,7 @@ type Data_Database struct {
 
 func (x *Data_Database) Reset() {
 	*x = Data_Database{}
-	mi := &file_internal_conf_conf_proto_msgTypes[18]
+	mi := &file_internal_conf_conf_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1284,7 +1216,7 @@ func (x *Data_Database) String() string {
 func (*Data_Database) ProtoMessage() {}
 
 func (x *Data_Database) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[18]
+	mi := &file_internal_conf_conf_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1330,7 +1262,7 @@ type Data_AgentMemory struct {
 
 func (x *Data_AgentMemory) Reset() {
 	*x = Data_AgentMemory{}
-	mi := &file_internal_conf_conf_proto_msgTypes[19]
+	mi := &file_internal_conf_conf_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1342,7 +1274,7 @@ func (x *Data_AgentMemory) String() string {
 func (*Data_AgentMemory) ProtoMessage() {}
 
 func (x *Data_AgentMemory) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[19]
+	mi := &file_internal_conf_conf_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1413,7 +1345,7 @@ type Runtime_Daytona struct {
 
 func (x *Runtime_Daytona) Reset() {
 	*x = Runtime_Daytona{}
-	mi := &file_internal_conf_conf_proto_msgTypes[20]
+	mi := &file_internal_conf_conf_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1425,7 +1357,7 @@ func (x *Runtime_Daytona) String() string {
 func (*Runtime_Daytona) ProtoMessage() {}
 
 func (x *Runtime_Daytona) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[20]
+	mi := &file_internal_conf_conf_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1506,7 +1438,7 @@ type Runtime_MCPServer struct {
 
 func (x *Runtime_MCPServer) Reset() {
 	*x = Runtime_MCPServer{}
-	mi := &file_internal_conf_conf_proto_msgTypes[21]
+	mi := &file_internal_conf_conf_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1518,7 +1450,7 @@ func (x *Runtime_MCPServer) String() string {
 func (*Runtime_MCPServer) ProtoMessage() {}
 
 func (x *Runtime_MCPServer) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[21]
+	mi := &file_internal_conf_conf_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1580,7 +1512,7 @@ type Runtime_RemoteAgent struct {
 
 func (x *Runtime_RemoteAgent) Reset() {
 	*x = Runtime_RemoteAgent{}
-	mi := &file_internal_conf_conf_proto_msgTypes[22]
+	mi := &file_internal_conf_conf_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1592,7 +1524,7 @@ func (x *Runtime_RemoteAgent) String() string {
 func (*Runtime_RemoteAgent) ProtoMessage() {}
 
 func (x *Runtime_RemoteAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[22]
+	mi := &file_internal_conf_conf_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1639,7 +1571,7 @@ type Runtime_MCPServer_Environment struct {
 
 func (x *Runtime_MCPServer_Environment) Reset() {
 	*x = Runtime_MCPServer_Environment{}
-	mi := &file_internal_conf_conf_proto_msgTypes[23]
+	mi := &file_internal_conf_conf_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1651,7 +1583,7 @@ func (x *Runtime_MCPServer_Environment) String() string {
 func (*Runtime_MCPServer_Environment) ProtoMessage() {}
 
 func (x *Runtime_MCPServer_Environment) ProtoReflect() protoreflect.Message {
-	mi := &file_internal_conf_conf_proto_msgTypes[23]
+	mi := &file_internal_conf_conf_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1766,15 +1698,10 @@ const file_internal_conf_conf_proto_rawDesc = "" +
 	"\aapi_key\x18\x01 \x01(\tR\x06apiKey\x12\x19\n" +
 	"\bbase_url\x18\x02 \x01(\tR\abaseUrl\x12\x14\n" +
 	"\x05model\x18\x03 \x01(\tR\x05model\x12'\n" +
-	"\x0ftimeout_seconds\x18\x04 \x01(\x03R\x0etimeoutSeconds\"\x82\x02\n" +
+	"\x0ftimeout_seconds\x18\x04 \x01(\x03R\x0etimeoutSeconds\"\x85\x01\n" +
 	"\x06Server\x12+\n" +
-	"\x04http\x18\x01 \x01(\v2\x17.kratos.api.Server.HTTPR\x04http\x12+\n" +
-	"\x04grpc\x18\x02 \x01(\v2\x17.kratos.api.Server.GRPCR\x04grpc\x1aN\n" +
+	"\x04http\x18\x01 \x01(\v2\x17.kratos.api.Server.HTTPR\x04http\x1aN\n" +
 	"\x04HTTP\x12\x18\n" +
-	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
-	"\x04addr\x18\x02 \x01(\tR\x04addr\x12\x18\n" +
-	"\atimeout\x18\x03 \x01(\x03R\atimeout\x1aN\n" +
-	"\x04GRPC\x12\x18\n" +
 	"\anetwork\x18\x01 \x01(\tR\anetwork\x12\x12\n" +
 	"\x04addr\x18\x02 \x01(\tR\x04addr\x12\x18\n" +
 	"\atimeout\x18\x03 \x01(\x03R\atimeout\"\x92\x03\n" +
@@ -1829,7 +1756,7 @@ func file_internal_conf_conf_proto_rawDescGZIP() []byte {
 	return file_internal_conf_conf_proto_rawDescData
 }
 
-var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 24)
+var file_internal_conf_conf_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_internal_conf_conf_proto_goTypes = []any{
 	(*Bootstrap)(nil),                     // 0: kratos.api.Bootstrap
 	(*Security)(nil),                      // 1: kratos.api.Security
@@ -1848,13 +1775,12 @@ var file_internal_conf_conf_proto_goTypes = []any{
 	(*AI_Claude)(nil),                     // 14: kratos.api.AI.Claude
 	(*AI_OpenRouter)(nil),                 // 15: kratos.api.AI.OpenRouter
 	(*Server_HTTP)(nil),                   // 16: kratos.api.Server.HTTP
-	(*Server_GRPC)(nil),                   // 17: kratos.api.Server.GRPC
-	(*Data_Database)(nil),                 // 18: kratos.api.Data.Database
-	(*Data_AgentMemory)(nil),              // 19: kratos.api.Data.AgentMemory
-	(*Runtime_Daytona)(nil),               // 20: kratos.api.Runtime.Daytona
-	(*Runtime_MCPServer)(nil),             // 21: kratos.api.Runtime.MCPServer
-	(*Runtime_RemoteAgent)(nil),           // 22: kratos.api.Runtime.RemoteAgent
-	(*Runtime_MCPServer_Environment)(nil), // 23: kratos.api.Runtime.MCPServer.Environment
+	(*Data_Database)(nil),                 // 17: kratos.api.Data.Database
+	(*Data_AgentMemory)(nil),              // 18: kratos.api.Data.AgentMemory
+	(*Runtime_Daytona)(nil),               // 19: kratos.api.Runtime.Daytona
+	(*Runtime_MCPServer)(nil),             // 20: kratos.api.Runtime.MCPServer
+	(*Runtime_RemoteAgent)(nil),           // 21: kratos.api.Runtime.RemoteAgent
+	(*Runtime_MCPServer_Environment)(nil), // 22: kratos.api.Runtime.MCPServer.Environment
 }
 var file_internal_conf_conf_proto_depIdxs = []int32{
 	4,  // 0: kratos.api.Bootstrap.server:type_name -> kratos.api.Server
@@ -1873,18 +1799,17 @@ var file_internal_conf_conf_proto_depIdxs = []int32{
 	14, // 13: kratos.api.AI.claude:type_name -> kratos.api.AI.Claude
 	15, // 14: kratos.api.AI.openrouter:type_name -> kratos.api.AI.OpenRouter
 	16, // 15: kratos.api.Server.http:type_name -> kratos.api.Server.HTTP
-	17, // 16: kratos.api.Server.grpc:type_name -> kratos.api.Server.GRPC
-	18, // 17: kratos.api.Data.database:type_name -> kratos.api.Data.Database
-	19, // 18: kratos.api.Data.agent_memory:type_name -> kratos.api.Data.AgentMemory
-	22, // 19: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
-	21, // 20: kratos.api.Runtime.mcp_servers:type_name -> kratos.api.Runtime.MCPServer
-	20, // 21: kratos.api.Runtime.daytona:type_name -> kratos.api.Runtime.Daytona
-	23, // 22: kratos.api.Runtime.MCPServer.env:type_name -> kratos.api.Runtime.MCPServer.Environment
-	23, // [23:23] is the sub-list for method output_type
-	23, // [23:23] is the sub-list for method input_type
-	23, // [23:23] is the sub-list for extension type_name
-	23, // [23:23] is the sub-list for extension extendee
-	0,  // [0:23] is the sub-list for field type_name
+	17, // 16: kratos.api.Data.database:type_name -> kratos.api.Data.Database
+	18, // 17: kratos.api.Data.agent_memory:type_name -> kratos.api.Data.AgentMemory
+	21, // 18: kratos.api.Runtime.remotes:type_name -> kratos.api.Runtime.RemoteAgent
+	20, // 19: kratos.api.Runtime.mcp_servers:type_name -> kratos.api.Runtime.MCPServer
+	19, // 20: kratos.api.Runtime.daytona:type_name -> kratos.api.Runtime.Daytona
+	22, // 21: kratos.api.Runtime.MCPServer.env:type_name -> kratos.api.Runtime.MCPServer.Environment
+	22, // [22:22] is the sub-list for method output_type
+	22, // [22:22] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_internal_conf_conf_proto_init() }
@@ -1898,7 +1823,7 @@ func file_internal_conf_conf_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_internal_conf_conf_proto_rawDesc), len(file_internal_conf_conf_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   24,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

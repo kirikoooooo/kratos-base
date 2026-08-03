@@ -8,7 +8,7 @@
       "properties": {
         "input": {
           "type": "string",
-          "description": "读取参数。可直接传相对路径，如 README.md；也可传 JSON 字符串，如 {\"path\":\"internal/data/langchain.go\",\"start\":1,\"end\":80}。"
+          "description": "读取参数。可直接传相对路径，如 README.md；也可传 JSON 字符串，如 {\"path\":\"internal/data/runtime.go\",\"start\":1,\"end\":80}。"
         }
       },
       "required": [

@@ -59,7 +59,28 @@ Trace 名和 observation 名是评测、Dashboard 过滤的稳定标识；不要
 
 输入/输出记录只保留必要内容并有长度上限；不得写入 API Key、Token、`.env` 内容或敏感文件全文。
 
-## 4. 验证闭环
+## 4. 上报自定义属性（Trace metadata）
+
+使用 `DelegationTraceStore.SetTaskMetadata` 为**已经开始、尚未结束**的任务增加或覆盖属性。它同时更新本地 Trace（Dashboard/SSE 可见）和 Langfuse Trace metadata；无需也不应直接构造 OTLP span。
+
+```go
+// trace 是注入到 service/runtime 的 datatrace.DelegationTraceStore。
+trace.SetTaskMetadata(taskID, map[string]any{
+	"tenant_id":        "acme",      // string
+	"experiment":       "router-v2", // 用于实验过滤
+	"a2a.remote":       true,         // bool
+	"retry_count":      2,            // integer
+	"quality_snapshot": map[string]any{"score": 0.92}, // JSON 字符串
+})
+```
+
+在 Langfuse 中这些字段显示为 `metadata.tenant_id`、`metadata.experiment` 等；OTLP 内部属性名为 `langfuse.trace.metadata.<key>`。相同 key 的后一次调用会覆盖前一次值。推荐在 `StartTask` 之后、`UpdateTask` 结束前调用；任务不存在或已结束时会被安全忽略。
+
+约束：key 仅可含字母、数字、`_`、`-`、`.`；值可用 string、bool、整数、浮点数，map/slice 会 JSON 编码。单个字符串/JSON 值最多 4096 字符。不要将 task ID、完整 prompt、用户原文、密钥或其他敏感/高基数值作为 metadata；任务 ID 已由框架自动上报。
+
+现有框架自动写入 `task_id`、`agent`、`status`、`plan_steps` 和 `context_chars`，业务自定义字段应使用具业务含义的 key，例如 `experiment`、`tenant_id`、`a2a.remote`。
+
+## 5. 验证闭环
 
 1. 在 CLI 提交一条消息，例如“读取 README.md 并总结项目”。
 2. 等待任务结束后输入 `/exit`，触发 OTLP batch flush。
@@ -81,7 +102,7 @@ Langfuse shutdown/flush completed
 
 4. 打开 Langfuse Project 的 `Traces`，按 `agent.task` 或 session ID 查找；进入 Trace 后检查 Generation、Tool 与最终输出是否齐全。
 
-## 5. 排障
+## 6. 排障
 
 | 日志/现象 | 原因与处理 |
 | --- | --- |
@@ -91,7 +112,7 @@ Langfuse shutdown/flush completed
 | `export batch failed` | 检查网络、Base URL、Project API Key 是否匹配；不要在日志中复制 Key |
 | 平台无 Trace | 确认 Cloud 区域/Project 正确，再按本节日志顺序排查 |
 
-## 6. 查询与评测
+## 7. 查询与评测
 
 使用官方 CLI 查询数据前，复用同一组环境变量：
 
@@ -109,7 +130,7 @@ npx langfuse-cli api observations list --help
 
 评测时固定模型、Prompt/Skill/MCP 配置、release 与 environment，保证不同实验可比较。
 
-## 7. 官方资料
+## 8. 官方资料
 
 - [OpenTelemetry 集成](https://langfuse.com/integrations/native/opentelemetry)
 - [Trace 最佳实践](https://langfuse.com/docs/observability/best-practices)

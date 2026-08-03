@@ -20,7 +20,7 @@ Gemini 使用 Google 的 OpenAI-compatible endpoint，不接入 Vertex AI 或 Go
 | 领域接口 | `internal/biz/provider`、`internal/biz/llm` | `LLMProvider` 提供 `GetProviderName`、创建中立的 `ModelClient`；`ProviderError` 保留来源与原始错误 |
 | Provider 工厂 | `internal/data/provider/provider.go` | 按 `ai.provider` 选择主 Provider，组装 fallback 链 |
 | OpenAI-compatible 策略 | `internal/data/provider/openai_compatible.go` | 所有 Provider 统一解析 API Key、Base URL、模型和超时 |
-| Chat Completions 协议适配 | `internal/data/llm/openai.go` | 所有 Provider 均通过 `github.com/sashabaranov/go-openai` 的 `CreateChatCompletion` 调用 |
+| Responses 协议适配 | `internal/data/llm/responses.go` | Provider 通过官方 `github.com/openai/openai-go` 的 Responses API 调用 |
 | CLI 配置 | `internal/service/cli_credentials.go` | 将 CLI 凭证写入当前 Provider 子配置 |
 
 Provider 不再拥有不同的网络调用实现。DeepSeek、Gemini、Grok、Claude 与 OpenRouter 仅提供不同默认模型/端点；所有模型与 tool calling 统一遵循 OpenAI Chat Completions 协议。

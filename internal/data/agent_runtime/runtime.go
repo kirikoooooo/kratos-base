@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
 	"strings"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"kratos-demo/internal/biz"
 	"kratos-demo/internal/conf"
 	"kratos-demo/internal/consts/public"
+	dataa2a "kratos-demo/internal/data/a2a"
 	agentcontext "kratos-demo/internal/data/agent_runtime/context"
 	agentctx "kratos-demo/internal/data/agent_runtime/ctx"
 	dataauthz "kratos-demo/internal/data/authz"
@@ -25,9 +27,9 @@ import (
 	actorpkg "kratos-demo/third_party/actor"
 	toolcatalog "kratos-demo/third_party/tools"
 
+	a2aproto "github.com/a2aproject/a2a-go/v2/a2a"
+	"github.com/a2aproject/a2a-go/v2/a2aclient"
 	"github.com/go-kratos/kratos/v2/log"
-	grpcclient "google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	lmm "kratos-demo/internal/biz/llm"
 )
 
@@ -49,7 +51,7 @@ const (
 
 var newProviderFn = provider.NewProvider
 
-type langChainAgentRuntime struct {
+type agentRuntime struct {
 	config         *conf.AI
 	runtimeConfig  *conf.Runtime
 	log            *log.Helper
@@ -84,11 +86,11 @@ func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatra
 			localTools.SetAuthorizer(authorizer)
 		}
 	}
-	runtime := &langChainAgentRuntime{
+	runtime := &agentRuntime{
 		config:         config,
 		runtimeConfig:  runtimeConfig,
 		log:            helper,
-		pid:            actorpkg.NewPID(runtimeActorPID, "langchain-runtime"),
+		pid:            actorpkg.NewPID(runtimeActorPID, "agent-runtime"),
 		trace:          trace,
 		memory:         memory,
 		pvd:            nil,
@@ -112,11 +114,11 @@ func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatra
 	return runtime
 }
 
-func (r *langChainAgentRuntime) PID() actorpkg.PID {
+func (r *agentRuntime) PID() actorpkg.PID {
 	return r.pid
 }
 
-func (r *langChainAgentRuntime) Process(msg *actorpkg.Message) {
+func (r *agentRuntime) Process(msg *actorpkg.Message) {
 	if msg == nil {
 		return
 	}
@@ -131,18 +133,18 @@ func (r *langChainAgentRuntime) Process(msg *actorpkg.Message) {
 	msg.Response(actorpkg.RespMessage{Err: err, Data: result})
 }
 
-func (r *langChainAgentRuntime) OnStop() {
+func (r *agentRuntime) OnStop() {
 	for _, client := range r.mcpClients {
 		client.Close()
 	}
 	r.log.Infof("agent runtime stopped: %s", r.Name())
 }
 
-func (r *langChainAgentRuntime) Name() string {
+func (r *agentRuntime) Name() string {
 	return "openai-runtime"
 }
 
-func (r *langChainAgentRuntime) Supports(agent public.AgentKind) bool {
+func (r *agentRuntime) Supports(agent public.AgentKind) bool {
 	switch agent {
 	case public.AgentKindDefault, public.AgentKindGeneric, public.AgentKindRouter, public.AgentKindCoder, public.AgentKindReviewer:
 		return true
@@ -151,7 +153,7 @@ func (r *langChainAgentRuntime) Supports(agent public.AgentKind) bool {
 	}
 }
 
-func (r *langChainAgentRuntime) Execute(ctx context.Context, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) Execute(ctx context.Context, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	normalized := normalizeRuntimeAgent(agent)
 	ctx = agentctx.WithAgent(ctx, normalized)
 	if r.memory != nil {
@@ -175,14 +177,14 @@ func (r *langChainAgentRuntime) Execute(ctx context.Context, agent public.AgentK
 	}
 }
 
-func (r *langChainAgentRuntime) ReceiveTask(ctx context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) ReceiveTask(ctx context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
 	if cmd == nil {
 		return nil, errors.New("task command is nil")
 	}
 	return r.Execute(agentctx.WithTaskID(ctx, cmd.TaskID), normalizeRuntimeAgent(public.AgentKind(cmd.Agent)), cmd.Prompt)
 }
 
-func (r *langChainAgentRuntime) SendTask(_ context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) SendTask(_ context.Context, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
 	if r == nil {
 		return nil, errors.New("agent runtime is not available")
 	}
@@ -203,21 +205,21 @@ func (r *langChainAgentRuntime) SendTask(_ context.Context, cmd *taskv1.TaskComm
 	return result, nil
 }
 
-func (r *langChainAgentRuntime) send(from actorpkg.PID, message *actorpkg.Message) error {
+func (r *agentRuntime) send(from actorpkg.PID, message *actorpkg.Message) error {
 	if r == nil {
 		return errors.New("agent runtime is not available")
 	}
 	return actorpkg.Send(from, r.PID(), message)
 }
 
-func (r *langChainAgentRuntime) syncRequest(from actorpkg.PID, message *actorpkg.Message) actorpkg.RespMessage {
+func (r *agentRuntime) syncRequest(from actorpkg.PID, message *actorpkg.Message) actorpkg.RespMessage {
 	if r == nil {
 		return actorpkg.RespMessage{Err: errors.New("agent runtime is not available")}
 	}
 	return actorpkg.SyncRequest(from, r.PID(), message)
 }
 
-func (r *langChainAgentRuntime) asyncRequest(from actorpkg.PID, message *actorpkg.Message, cb func(actorpkg.RespMessage)) {
+func (r *agentRuntime) asyncRequest(from actorpkg.PID, message *actorpkg.Message, cb func(actorpkg.RespMessage)) {
 	if r == nil {
 		if cb != nil {
 			cb(actorpkg.RespMessage{Err: errors.New("agent runtime is not available")})
@@ -227,7 +229,7 @@ func (r *langChainAgentRuntime) asyncRequest(from actorpkg.PID, message *actorpk
 	actorpkg.AsyncRequest(from, r.PID(), message, cb)
 }
 
-func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) runRouter(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
 	modelClient, err := r.newFunctionCallingLLM()
 	if err != nil {
 		return nil, err
@@ -266,7 +268,7 @@ func (r *langChainAgentRuntime) runRouter(ctx context.Context, prompt string) (*
 	return r.runToolCallingLoop(ctx, modelClient, toolset, systemPrompt, prompt, "router agent 已通过本地 tool calling 完成编排")
 }
 
-func (r *langChainAgentRuntime) runDefault(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) runDefault(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
 	modelClient, err := r.newFunctionCallingLLM()
 	if err != nil {
 		return nil, err
@@ -288,7 +290,7 @@ func (r *langChainAgentRuntime) runDefault(ctx context.Context, prompt string) (
 	return r.runToolCallingLoop(ctx, modelClient, toolset, systemPrompt, prompt, "default agent profile 已通过通用 runtime 完成任务")
 }
 
-func (r *langChainAgentRuntime) runCoder(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) runCoder(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
 	modelClient, err := r.newFunctionCallingLLM()
 	if err != nil {
 		return nil, err
@@ -337,7 +339,7 @@ func normalizeRuntimeAgent(agent public.AgentKind) public.AgentKind {
 	}
 }
 
-func (r *langChainAgentRuntime) runReviewer(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) runReviewer(ctx context.Context, prompt string) (*taskv1.TaskResult, error) {
 	return r.runPlainLLMTask(ctx, strings.Join([]string{
 		"你是 ReviewerAgent，负责进行代码审查、设计评审、边界条件检查和风险识别。",
 		"请直接给出真实中文评审结论、问题清单、风险点和改进建议。",
@@ -345,7 +347,7 @@ func (r *langChainAgentRuntime) runReviewer(ctx context.Context, prompt string) 
 	}, "\n"), prompt, "reviewer agent 已通过真实 LLM 完成审查")
 }
 
-func (r *langChainAgentRuntime) newLLM() (lmm.ModelClient, error) {
+func (r *agentRuntime) newLLM() (lmm.ModelClient, error) {
 	pvd, err := r.getProvider()
 	if err != nil {
 		return nil, err
@@ -353,7 +355,7 @@ func (r *langChainAgentRuntime) newLLM() (lmm.ModelClient, error) {
 	return pvd.CreateModel()
 }
 
-func (r *langChainAgentRuntime) newFunctionCallingLLM() (lmm.ModelClient, error) {
+func (r *agentRuntime) newFunctionCallingLLM() (lmm.ModelClient, error) {
 	pvd, err := r.getProvider()
 	if err != nil {
 		return nil, err
@@ -362,7 +364,7 @@ func (r *langChainAgentRuntime) newFunctionCallingLLM() (lmm.ModelClient, error)
 }
 
 // getProvider 懒加载 provider，每次调用时检查 r.config 是否已更新（如 CLI 凭证注入后）。
-func (r *langChainAgentRuntime) getProvider() (provider.LLMProvider, error) {
+func (r *agentRuntime) getProvider() (provider.LLMProvider, error) {
 	if r.pvd != nil {
 		return r.pvd, nil
 	}
@@ -379,7 +381,7 @@ type managedToolset struct {
 	Handlers map[string]toolcatalog.Handler
 }
 
-func (r *langChainAgentRuntime) buildManagedToolset(bindings []toolcatalog.BindingSpec) (*managedToolset, error) {
+func (r *agentRuntime) buildManagedToolset(bindings []toolcatalog.BindingSpec) (*managedToolset, error) {
 	if r == nil {
 		return nil, errors.New("agent runtime is nil")
 	}
@@ -416,10 +418,10 @@ func (r *langChainAgentRuntime) buildManagedToolset(bindings []toolcatalog.Bindi
 	tools = append(tools, localToolDefs...)
 	for _, client := range r.mcpClients {
 		for _, tool := range client.Tools() {
-			if tool.Function == nil {
+			if tool.OfFunction == nil {
 				continue
 			}
-			name := strings.TrimSpace(tool.Function.Name)
+			name := strings.TrimSpace(tool.OfFunction.Name)
 			if _, exists := handlers[name]; exists {
 				return nil, fmt.Errorf("duplicate MCP tool name: %s", name)
 			}
@@ -459,7 +461,7 @@ func toolCallingSystemSuffix() string {
 	}, "\n")
 }
 
-func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelClient lmm.ModelClient, toolset *managedToolset, systemPrompt, prompt, summary string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) runToolCallingLoop(ctx context.Context, modelClient lmm.ModelClient, toolset *managedToolset, systemPrompt, prompt, summary string) (*taskv1.TaskResult, error) {
 	if modelClient == nil {
 		return nil, errors.New("llm model is nil")
 	}
@@ -628,7 +630,7 @@ func (r *langChainAgentRuntime) runToolCallingLoop(ctx context.Context, modelCli
 	return r.finishWithFailureAnalysis(ctx, modelClient, messages, systemText, sessionID, summary, errors.New("tool calling loop exceeded max iterations"), "tool_loop_exhausted")
 }
 
-func (r *langChainAgentRuntime) publishLLMGeneration(ctx context.Context, messages []lmm.MessageContent, response *lmm.ContentResponse) {
+func (r *agentRuntime) publishLLMGeneration(ctx context.Context, messages []lmm.MessageContent, response *lmm.ContentResponse) {
 	if r == nil || r.trace == nil || response == nil {
 		return
 	}
@@ -675,7 +677,7 @@ func textFromContentParts(parts []lmm.ContentPart) string {
 	return builder.String()
 }
 
-func (r *langChainAgentRuntime) finishWithFailureAnalysis(
+func (r *agentRuntime) finishWithFailureAnalysis(
 	ctx context.Context,
 	modelClient lmm.ModelClient,
 	messages []lmm.MessageContent,
@@ -745,7 +747,7 @@ func buildFallbackFailureAnalysis(cause error, stage string) string {
 	return b.String()
 }
 
-func (r *langChainAgentRuntime) publishAgentProgress(ctx context.Context, text string, beforeTools bool) {
+func (r *agentRuntime) publishAgentProgress(ctx context.Context, text string, beforeTools bool) {
 	if r == nil || r.trace == nil {
 		return
 	}
@@ -800,7 +802,7 @@ func firstMeaningfulLine(text string) string {
 	return ""
 }
 
-func (r *langChainAgentRuntime) publishToolFailure(ctx context.Context, toolName string, call lmm.ToolCallPart, err error) {
+func (r *agentRuntime) publishToolFailure(ctx context.Context, toolName string, call lmm.ToolCallPart, err error) {
 	if r == nil || r.trace == nil || err == nil {
 		return
 	}
@@ -844,7 +846,7 @@ func toolCallTarget(call lmm.ToolCallPart) string {
 	return input
 }
 
-func (r *langChainAgentRuntime) recordSessionError(ctx context.Context, stage, tool, message, detail string) {
+func (r *agentRuntime) recordSessionError(ctx context.Context, stage, tool, message, detail string) {
 	if r == nil || r.memory == nil {
 		return
 	}
@@ -966,11 +968,11 @@ func normalizeToolInput(arguments string) (string, error) {
 	return arguments, nil
 }
 
-func (r *langChainAgentRuntime) runFunctionsAgent(_ context.Context, _ any, _, _ string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) runFunctionsAgent(_ context.Context, _ any, _, _ string) (*taskv1.TaskResult, error) {
 	return nil, errors.New("runFunctionsAgent is no longer used")
 }
 
-func (r *langChainAgentRuntime) publishContextUsage(ctx context.Context, sessionID string, meta agentcontext.PrepareMeta) {
+func (r *agentRuntime) publishContextUsage(ctx context.Context, sessionID string, meta agentcontext.PrepareMeta) {
 	if r.trace == nil || strings.TrimSpace(sessionID) == "" {
 		return
 	}
@@ -1011,7 +1013,7 @@ func (r *langChainAgentRuntime) publishContextUsage(ctx context.Context, session
 	})
 }
 
-func (r *langChainAgentRuntime) persistConversation(ctx context.Context, sessionID string, messages []lmm.MessageContent) {
+func (r *agentRuntime) persistConversation(ctx context.Context, sessionID string, messages []lmm.MessageContent) {
 	if r.memory == nil || strings.TrimSpace(sessionID) == "" {
 		return
 	}
@@ -1029,7 +1031,7 @@ func (r *langChainAgentRuntime) persistConversation(ctx context.Context, session
 	}
 }
 
-func (r *langChainAgentRuntime) runPlainLLMTask(ctx context.Context, systemPrompt, prompt, summary string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) runPlainLLMTask(ctx context.Context, systemPrompt, prompt, summary string) (*taskv1.TaskResult, error) {
 	modelClient, err := r.newLLM()
 	if err != nil {
 		return nil, err
@@ -1070,7 +1072,7 @@ func (r *langChainAgentRuntime) runPlainLLMTask(ctx context.Context, systemPromp
 	}, nil
 }
 
-func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) dispatchSubTask(ctx context.Context, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	cmd := &taskv1.TaskCommand{
 		Agent:  string(agent),
 		Prompt: strings.TrimSpace(prompt),
@@ -1105,10 +1107,17 @@ func (r *langChainAgentRuntime) dispatchSubTask(ctx context.Context, agent publi
 			PromptPreview: common.PreviewPrompt(prompt),
 		})
 	}
-	return r.ReceiveTask(ctx, cmd)
+	message := a2aproto.NewMessage(a2aproto.MessageRoleUser, a2aproto.NewTextPart(cmd.Prompt))
+	message.Metadata = map[string]any{"agent": cmd.Agent, "task_id": agentctx.TaskID(ctx)}
+	handler := dataa2a.NewHandlerWithDispatch(r, r.ReceiveTask)
+	result, err := handler.SendMessage(ctx, &a2aproto.SendMessageRequest{Message: message})
+	if err != nil {
+		return nil, fmt.Errorf("local A2A task failed: %w", err)
+	}
+	return taskResultFromA2A(result), nil
 }
 
-func (r *langChainAgentRuntime) lookupRemoteAgent(agent public.AgentKind) *conf.Runtime_RemoteAgent {
+func (r *agentRuntime) lookupRemoteAgent(agent public.AgentKind) *conf.Runtime_RemoteAgent {
 	if r == nil || r.runtimeConfig == nil {
 		return nil
 	}
@@ -1123,7 +1132,7 @@ func (r *langChainAgentRuntime) lookupRemoteAgent(agent public.AgentKind) *conf.
 	return nil
 }
 
-func (r *langChainAgentRuntime) executeRemoteTask(ctx context.Context, remote *conf.Runtime_RemoteAgent, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) executeRemoteTask(ctx context.Context, remote *conf.Runtime_RemoteAgent, cmd *taskv1.TaskCommand) (*taskv1.TaskResult, error) {
 	if remote == nil {
 		return nil, errors.New("remote agent config is nil")
 	}
@@ -1136,24 +1145,22 @@ func (r *langChainAgentRuntime) executeRemoteTask(ctx context.Context, remote *c
 		timeout = time.Duration(remote.GetTimeout()) * time.Second
 	}
 
-	dialCtx, dialCancel := context.WithTimeout(ctx, timeout)
-	defer dialCancel()
-
-	conn, err := grpcclient.DialContext(dialCtx, target,
-		grpcclient.WithTransportCredentials(insecure.NewCredentials()),
-		grpcclient.WithBlock(),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("dial remote agent %s failed: %w", target, err)
-	}
-	defer conn.Close()
-
 	callCtx, callCancel := context.WithTimeout(ctx, timeout)
 	defer callCancel()
-
-	client := taskv1.NewAgentRuntimeServiceClient(conn)
+	endpoint := target
+	if !strings.HasPrefix(endpoint, "http://") && !strings.HasPrefix(endpoint, "https://") {
+		endpoint = "http://" + endpoint + "/a2a"
+	}
+	client, err := a2aclient.NewFromEndpoints(callCtx, []*a2aproto.AgentInterface{
+		a2aproto.NewAgentInterface(endpoint, a2aproto.TransportProtocolJSONRPC),
+	}, a2aclient.WithJSONRPCTransport(&http.Client{Timeout: timeout}))
+	if err != nil {
+		return nil, fmt.Errorf("create A2A client for remote agent %s: %w", target, err)
+	}
 	start := time.Now()
-	result, err := client.ExecuteTask(callCtx, cmd)
+	message := a2aproto.NewMessage(a2aproto.MessageRoleUser, a2aproto.NewTextPart(cmd.GetPrompt()))
+	message.Metadata = map[string]any{"agent": cmd.GetAgent(), "task_id": cmd.GetTaskID()}
+	a2aResult, err := client.SendMessage(callCtx, &a2aproto.SendMessageRequest{Message: message})
 	if err != nil {
 		if r.trace != nil {
 			r.trace.AppendEvent(datatrace.DelegationEvent{
@@ -1166,8 +1173,9 @@ func (r *langChainAgentRuntime) executeRemoteTask(ctx context.Context, remote *c
 				Mode:   cmd.GetAgent(),
 			})
 		}
-		return nil, fmt.Errorf("remote execute task failed: %w", err)
+		return nil, fmt.Errorf("remote A2A task failed: %w", err)
 	}
+	result := taskResultFromA2A(a2aResult)
 	if r.trace != nil {
 		r.trace.AppendEvent(datatrace.DelegationEvent{
 			Time:       time.Now(),
@@ -1181,6 +1189,28 @@ func (r *langChainAgentRuntime) executeRemoteTask(ctx context.Context, remote *c
 		})
 	}
 	return result, nil
+}
+
+func taskResultFromA2A(result a2aproto.SendMessageResult) *taskv1.TaskResult {
+	var message *a2aproto.Message
+	switch typed := result.(type) {
+	case *a2aproto.Message:
+		message = typed
+	case *a2aproto.Task:
+		message = typed.Status.Message
+	}
+	output := ""
+	if message != nil {
+		for _, part := range message.Parts {
+			if text := strings.TrimSpace(part.Text()); text != "" {
+				if output != "" {
+					output += "\n"
+				}
+				output += text
+			}
+		}
+	}
+	return &taskv1.TaskResult{Summary: "remote A2A task completed", Output: output}
 }
 
 func formatTaskResult(agentName string, result *taskv1.TaskResult) string {
@@ -1199,7 +1229,7 @@ func formatTaskResult(agentName string, result *taskv1.TaskResult) string {
 	return strings.Join(parts, "\n")
 }
 
-func (r *langChainAgentRuntime) VerifyDelegation(ctx context.Context, taskID string, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
+func (r *agentRuntime) VerifyDelegation(ctx context.Context, taskID string, agent public.AgentKind, prompt string) (*taskv1.TaskResult, error) {
 	prompt = strings.TrimSpace(prompt)
 	if prompt == "" {
 		prompt = "请验证 router -> " + string(agent) + " 的委派链路"

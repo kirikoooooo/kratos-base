@@ -19,6 +19,10 @@ import (
 	"kratos-demo/internal/conf"
 
 	lmm "kratos-demo/internal/biz/llm"
+
+	"github.com/openai/openai-go/packages/param"
+	"github.com/openai/openai-go/responses"
+	"github.com/openai/openai-go/shared/constant"
 )
 
 type Config struct {
@@ -150,7 +154,17 @@ func (c *Client) listTools(ctx context.Context) ([]lmm.Tool, error) {
 		if err := json.Unmarshal(schema, &parameters); err != nil {
 			return nil, fmt.Errorf("decode schema for MCP tool %s: %w", tool.Name, err)
 		}
-		tools = append(tools, lmm.Tool{Type: "function", Function: &lmm.FunctionDefinition{Name: tool.Name, Description: tool.Description, Parameters: parameters}})
+		parameterSchema, ok := parameters.(map[string]any)
+		if !ok {
+			parameterSchema = map[string]any{"type": "object", "properties": map[string]any{}}
+		}
+		tools = append(tools, lmm.Tool{OfFunction: &responses.FunctionToolParam{
+			Name:        tool.Name,
+			Description: param.NewOpt(tool.Description),
+			Parameters:  parameterSchema,
+			Strict:      param.NewOpt(false),
+			Type:        constant.Function("function"),
+		}})
 	}
 	return tools, nil
 }

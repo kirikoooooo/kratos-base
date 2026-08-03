@@ -12,8 +12,6 @@ import (
 	"net/http"
 	"os"
 	"strings"
-
-	"github.com/tmc/langchaingo/embeddings"
 )
 
 // Config points at the local CLIP demo service. Both endpoints use the same
@@ -29,7 +27,7 @@ type client struct {
 }
 
 // CompareImageToTexts encodes image and candidates with the same CLIP model.
-// Text embedding is exposed through LangChainGo's EmbedderClient adapter.
+// Text and image vectors are fetched from the same CLIP service.
 func CompareImageToTexts(ctx context.Context, cfg Config, imagePath string, candidates []string) ([]float64, error) {
 	if strings.TrimSpace(cfg.BaseURL) == "" {
 		return nil, fmt.Errorf("CLIP_BASE_URL is required")
@@ -38,11 +36,7 @@ func CompareImageToTexts(ctx context.Context, cfg Config, imagePath string, cand
 		return nil, fmt.Errorf("at least one candidate is required")
 	}
 	c := &client{config: cfg, httpClient: http.DefaultClient}
-	embedder, err := embeddings.NewEmbedder(embeddings.EmbedderClientFunc(c.embedTexts))
-	if err != nil {
-		return nil, fmt.Errorf("create LangChainGo embedder: %w", err)
-	}
-	textVectors, err := embedder.EmbedDocuments(ctx, candidates)
+	textVectors, err := c.embedTexts(ctx, candidates)
 	if err != nil {
 		return nil, fmt.Errorf("embed CLIP text: %w", err)
 	}

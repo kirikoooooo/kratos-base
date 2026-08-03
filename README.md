@@ -21,14 +21,14 @@
 | 会话文件变更 | 按 session 累积 `read_file` / `edit_file` / `write_file` 变更，Dashboard 展示 unified diff |
 | 会话错误日志 | 失败写入 JSONL，下一轮 system prompt 注入近期错误摘要 |
 | 委派 Trace | 内存 trace + Dashboard 时间线、执行计划、SSE 实时刷新 |
-| A2A 验证 | router 本地/远端 gRPC 子任务委派（过渡性验证资产） |
+| A2A 验证 | router 本地/远端 A2A JSON-RPC 子任务委派 |
 
 ### 架构分层
 
 ```text
 cmd/kratos-demo/              # 入口、Wire 注入
 internal/
-  service/                    # HTTP/gRPC、Dashboard 适配
+  service/                    # HTTP JSON-RPC、Dashboard 适配
   server/                     # Kratos Server
   conf/                       # 配置 Proto
   biz/                        # 仅 AgentRuntime / DelegationVerifier 契约
@@ -101,7 +101,6 @@ CLI 命令：`/help` `/agents` `/session` `/new` `/exit`
 启动后可访问：
 
 - HTTP: `http://127.0.0.1:8000`
-- gRPC: `127.0.0.1:9000`
 - A2A Dashboard: `http://127.0.0.1:8000/debug/a2a`
 
 ### 配置示例（`configs/config.yaml`）
@@ -138,7 +137,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/tasks \
 
 ### 已完成
 
-- [x] `Kratos` HTTP / gRPC 服务与 `biz / data / service / server` 分层
+- [x] `Kratos` HTTP 服务与 JSON-RPC 接口与 `biz / data / service / server` 分层
 - [x] 任务创建与查询 API、内存任务存储、actor 任务调度
 - [x] `router / coder / reviewer` agent 与 router 本地/远端委派
 - [x] A2A 委派 trace 与 Dashboard（时间线、SSE、执行计划）
@@ -160,7 +159,7 @@ curl -X POST http://127.0.0.1:8000/api/v1/tasks \
 
 - [ ] 分布式运行与跨节点调度
 - [ ] 统一 `coordinator` 与多 Agent 编排
-- [ ] 完整 A2A 协议抽象（不仅 gRPC 直连）
+- [ ] A2A 流式、取消与认证能力
 - [ ] 游戏业务 actor 与业务消息模型接入
 
 ## 多 Agent 协同畅想（后续阶段）

@@ -24,13 +24,13 @@ func (p *compatibleProvider) GetProviderName() bizprovider.ProviderType {
 }
 
 func (p *compatibleProvider) CreateModel(_ ...ModelOption) (bizllm.ModelClient, error) {
-	return datallm.NewOpenAIModelClient(datallm.ModelConfig{
+	return datallm.NewResponsesModelClient(datallm.ResponsesModelConfig{
 		APIKey: p.config.APIKey, BaseURL: p.config.BaseURL, Model: p.config.Model, Timeout: p.config.Timeout,
 	}), nil
 }
 
 // newOpenAICompatibleProvider builds every supported provider around the
-// OpenAI Chat Completions protocol implemented by github.com/sashabaranov/go-openai.
+// OpenAI Responses protocol implemented by the official github.com/openai/openai-go SDK.
 func newOpenAICompatibleProvider(ai *conf.AI, name bizprovider.ProviderType, logger *log.Helper) (LLMProvider, error) {
 	var apiKey, baseURL, model string
 	var timeoutSeconds int64

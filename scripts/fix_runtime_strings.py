@@ -1,7 +1,7 @@
 import re
 from pathlib import Path
 
-p = Path(r"d:\code\kratos-base\internal\data\agent\langchain.go")
+p = Path(r"d:\code\kratos-base\internal\data\agent\runtime.go")
 text = p.read_text(encoding="utf-8", errors="replace")
 
 router = '''promptLines := []string{

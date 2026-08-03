@@ -3,7 +3,7 @@
 The demo loads the Chinese-capable `OFA-Sys/chinese-clip-vit-base-patch16` once
 in a local Python service.
 It encodes image and text with the same checkpoint, L2-normalizes both vectors,
-then uses Go to calculate cosine similarity. `langchaingo/embeddings` adapts
+then uses Go to calculate cosine similarity. the local CLIP service provides
 the service's text endpoint; LangChainGo does not provide a CLIP image embedder.
 
 ## Start the local service

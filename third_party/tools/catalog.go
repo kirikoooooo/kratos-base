@@ -11,6 +11,10 @@ import (
 	"sync"
 
 	lmm "kratos-demo/internal/biz/llm"
+
+	"github.com/openai/openai-go/packages/param"
+	"github.com/openai/openai-go/responses"
+	"github.com/openai/openai-go/shared/constant"
 )
 
 //go:embed *.json
@@ -121,16 +125,23 @@ func (c *Catalog) AsLLMTools(names []string) ([]lmm.Tool, error) {
 			return nil, fmt.Errorf("tool definition not found: %s", strings.TrimSpace(name))
 		}
 		tools = append(tools, lmm.Tool{
-			Type: definition.Type,
-			Function: &lmm.FunctionDefinition{
+			OfFunction: &responses.FunctionToolParam{
 				Name:        definition.Function.Name,
-				Description: definition.Function.Description,
-				Parameters:  definition.Function.Parameters,
-				Strict:      definition.Function.Strict,
+				Description: param.NewOpt(definition.Function.Description),
+				Parameters:  schemaParameters(definition.Function.Parameters),
+				Strict:      param.NewOpt(definition.Function.Strict),
+				Type:        constant.Function("function"),
 			},
 		})
 	}
 	return tools, nil
+}
+
+func schemaParameters(value any) map[string]any {
+	if schema, ok := value.(map[string]any); ok {
+		return schema
+	}
+	return map[string]any{"type": "object", "properties": map[string]any{}}
 }
 
 func validateDefinition(definition Definition, source string) error {

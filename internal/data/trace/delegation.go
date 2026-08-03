@@ -12,6 +12,9 @@ import (
 type DelegationTraceStore interface {
 	StartTask(taskID string, agent public.AgentKind, status string)
 	UpdateTask(taskID string, status string, result *taskv1.TaskResult, err error)
+	// SetTaskMetadata adds or replaces custom metadata for a running task.
+	// Values are mirrored to external observers such as Langfuse.
+	SetTaskMetadata(taskID string, metadata map[string]any)
 	AppendEvent(event DelegationEvent)
 	UpdatePlan(taskID string, steps []PlanStep)
 	ListSessions(limit int) []DelegationSession
@@ -23,6 +26,7 @@ type DelegationTraceStore interface {
 type DelegationTraceObserver interface {
 	StartTask(taskID string, agent public.AgentKind, status string)
 	UpdateTask(taskID string, status string, result *taskv1.TaskResult, err error)
+	SetTaskMetadata(taskID string, metadata map[string]any)
 	AppendEvent(event DelegationEvent)
 	UpdatePlan(taskID string, steps []PlanStep)
 	UpdateContextUsage(taskID string, usage ContextUsageSnapshot, compress *ContextCompressResult)
@@ -100,6 +104,7 @@ type DelegationSession struct {
 	RootAgent           string                          `json:"root_agent"`
 	ConversationPreview string                          `json:"conversation_preview,omitempty"`
 	Status              string                          `json:"status"`
+	Metadata            map[string]any                  `json:"metadata,omitempty"`
 	ResultSummary       string                          `json:"result_summary,omitempty"`
 	ResultOutput        string                          `json:"result_output,omitempty"`
 	Error               string                          `json:"error,omitempty"`
