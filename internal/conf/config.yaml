@@ -17,6 +17,15 @@ ai:
   openai:
     model: gpt-5.4-mini
     timeout_seconds: 180
+observability:
+  langfuse:
+    enabled: true
+    host: https://cloud.langfuse.com
+    public_key_env: LANGFUSE_PUBLIC_KEY
+    secret_key_env: LANGFUSE_SECRET_KEY
+    environment: development
+    release: kratos-demo
+    flush_timeout_seconds: 5
 runtime:
   remotes:
     - agent: coder

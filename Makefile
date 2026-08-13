@@ -1,4 +1,4 @@
-MAIN := ./cmd/kratos-demo
+MAIN := ./app/agent-runtime/cmd
 BIN_DIR := bin
 # Prefer GVM's selected Go binary when GOROOT is set. Shell command lookup can
 # otherwise resolve a stale Go toolchain that is incompatible with GOROOT.
@@ -27,16 +27,16 @@ DIST_WIN := dist/AgentCli-win64
 DIST_MAC := dist/AgentCli-mac-arm64
 RELEASE_NAME := AgentCli
 
-.PHONY: config proto wire build build-bin build-mac build-win release-win release-mac cli cli-bin run run-bin
+.PHONY: config proto wire build build-bin build-mac build-win release-win release-mac cli cli-bin run run-bin dashboard memory
 
 config:
 	$(PROTOC) --proto_path=. --go_out=paths=source_relative:. internal/conf/conf.proto
 
 proto:
-	$(PROTOC) --proto_path=. --proto_path=third_party --go_out=paths=source_relative:.. --go-http_out=paths=source_relative:. api/task/v1/task.proto
+	$(PROTOC) --proto_path=. --proto_path=third_party --go_out=paths=source_relative:. --go-grpc_out=paths=source_relative:. --go-http_out=paths=source_relative:. api/task/v1/task.proto api/memory/v1/memory.proto
 
 wire:
-	cd cmd/kratos-demo && wire
+	cd app/agent-runtime/cmd && wire
 
 # 编译全部 Go 包（不含可执行文件产物）
 build:
@@ -66,26 +66,34 @@ build-win:
 release-win: build-win
 	@mkdir -p $(DIST_WIN)/configs
 	cp $(BIN_WIN) $(DIST_WIN)/$(RELEASE_NAME).exe
-	@echo "configs/ is generated on the first run"
+	@echo "app/agent-runtime/configs/ is generated on the first run"
 	@echo "release ready: $(DIST_WIN)/"
 	@echo "  $(RELEASE_NAME).exe -cli"
 
 release-mac: build-bin
 	@mkdir -p $(DIST_MAC)/configs
 	cp $(BIN) $(DIST_MAC)/$(RELEASE_NAME)
-	@echo "configs/ is generated on the first run"
+	@echo "app/agent-runtime/configs/ is generated on the first run"
 	@echo "release ready: $(DIST_MAC)/"
 	@echo "  ./$(RELEASE_NAME) -cli"
 
 cli:
-	$(GO_RUN) run $(MAIN) -cli $(ARGS)
+	$(GO_RUN) run $(MAIN) -conf ./app/agent-runtime/configs -cli $(ARGS)
 
 # 使用已编译的原生二进制启动 CLI（先 make build-bin）
 cli-bin: build-bin
 	$(BIN) -cli
 
 run:
-	$(GO_RUN) run $(MAIN)
+	$(GO_RUN) run $(MAIN) -conf ./app/agent-runtime/configs
 
 run-bin: build-bin
 	$(BIN)
+
+# Dashboard is a control-plane BFF. It requires agent-runtime gRPC at :9000.
+dashboard:
+	$(GO_RUN) run ./app/dashboard/cmd
+
+# Memory exposes its read-side prompt-context gRPC API at :9002 by default.
+memory:
+	$(GO_RUN) run ./app/memory/cmd

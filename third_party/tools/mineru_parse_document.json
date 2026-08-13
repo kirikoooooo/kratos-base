@@ -1,0 +1,31 @@
+{
+  "type": "function",
+  "function": {
+    "name": "mineru_parse_document",
+    "description": "Parse a workspace PDF with MinerU and return paths to its extracted Markdown and assets. Requires runtime.mineru.enabled=true and MINERU_API_TOKEN.",
+    "strict": true,
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Workspace-relative path to a PDF file, for example Sublinear.pdf."
+        },
+        "language": {
+          "type": "string",
+          "description": "Optional document language hint, such as en or ch."
+        },
+        "model_version": {
+          "type": "string",
+          "description": "Optional MinerU model version. Defaults to pipeline."
+        },
+        "is_ocr": {
+          "type": "boolean",
+          "description": "Set true for scanned PDFs that require OCR. Defaults to false."
+        }
+      },
+      "required": ["path"]
+    }
+  }
+}

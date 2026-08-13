@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package api.memory.v1;
+
+option go_package = "kratos-demo/api/memory/v1;v1";
+
+// MemoryService is intentionally narrow for the first extraction phase.
+// Conversation mutation/compression remains in agent-runtime until its
+// concurrency and transactional behavior are explicitly specified.
+service MemoryService {
+  rpc GetPromptContext(GetPromptContextRequest) returns (GetPromptContextReply);
+}
+
+message GetPromptContextRequest {
+  string user_id = 1;
+  string session_id = 2;
+}
+
+message GetPromptContextReply {
+  string content = 1;
+}

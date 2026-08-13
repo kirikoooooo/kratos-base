@@ -40,7 +40,7 @@ func TestClientDiscoversOfficialMilvusTools(t *testing.T) {
 	client, tools, err := NewClient(ctx, Config{
 		Command: "uv",
 		Args: []string{
-			"--directory", filepath.Join("tools", "mcp-server-milvus"),
+			"--directory", filepath.Join("remote_service", "mcp-server-milvus"),
 			"run", "src/mcp_server_milvus/server.py",
 			"--milvus-uri", ".myagent/milvus.db",
 		},

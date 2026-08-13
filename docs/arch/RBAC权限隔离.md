@@ -125,7 +125,9 @@ HTTP/gRPC/CLI
 
 ## 6. 当前配置与后续扩展
 
-`configs/config.yaml` 顶层 `security` 已生效。CLI 将 `local_principal` 注入每个 turn 的 context；`ToolExecutor` 在文件、Skill 和命令执行前强制授权。未配置主体、角色、权限、路径或命令即拒绝。
+`app/agent-runtime/configs/config.yaml` 顶层 `security` 已生效。CLI 将 `local_principal` 注入每个 turn 的 context；router 与其他逻辑 Agent 继承同一 principal，不会获得隐式的文件权限。`ToolExecutor` 在文件、Skill 和命令执行前强制授权。未配置主体、角色、权限、路径或命令即拒绝。
+
+默认 `local-dev -> developer` 允许只读项目根目录、`README.md`、`Makefile`、`go.mod`/`go.sum` 与 `api/`、`app/`、`internal/`、`pkg/`、`docs/`、`scripts/`、`third_party/`；这是让 router 能够分析当前 Monorepo 结构所需的最小读取范围。它不扩大 `edit_file`、`write_file`、`delete_file` 或 `exec_command` 的权限。
 
 实现使用 `github.com/casbin/casbin/v2` 的文件模型：`configs/casbin/model.conf` 定义 `sub, obj, path, cmd` 请求与匹配规则，`configs/casbin/policy.csv` 保存 `p(role, permission, path, command)` 和 `g(principal, role)` 策略。路径使用 Casbin `keyMatch2` 的 `internal/*` 形式；命令仍必须完整匹配。
 

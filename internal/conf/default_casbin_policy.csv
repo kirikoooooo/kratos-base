@@ -1,7 +1,13 @@
 # p, role, permission, path, command
+p, developer, tool.read_file, ., *
 p, developer, tool.read_file, README.md, *
+p, developer, tool.read_file, Makefile, *
+p, developer, tool.read_file, go.mod, *
+p, developer, tool.read_file, go.sum, *
 p, developer, tool.read_file, api/*, *
+p, developer, tool.read_file, app/*, *
 p, developer, tool.read_file, internal/*, *
+p, developer, tool.read_file, pkg/*, *
 p, developer, tool.read_file, configs/*, *
 p, developer, tool.read_file, docs/*, *
 p, developer, tool.read_file, scripts/*, *
@@ -33,6 +39,7 @@ p, developer, tool.exec_command, *, make proto
 p, developer, tool.exec_command, *, make test
 
 p, analyst, tool.daytona_data_analysis, *, *
+p, analyst, tool.mineru_parse_document, *, *
 
 # g, principal, role
 g, local-dev, developer

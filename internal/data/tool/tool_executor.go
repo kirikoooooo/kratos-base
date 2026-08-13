@@ -39,6 +39,9 @@ func (r *ToolExecutor) SetAuthorizer(authorizer bizauthz.Authorizer) { r.authori
 
 func (r *ToolExecutor) SetDaytona(config *conf.Runtime_Daytona) { r.daytona = config }
 
+// WorkspaceRoot 返回工具执行器绑定的工作区根目录。
+func (r *ToolExecutor) WorkspaceRoot() string { return r.root }
+
 func (r *ToolExecutor) authorize(ctx context.Context, permission, path, command string) error {
 	if r.authorizer == nil {
 		return nil
@@ -78,6 +81,7 @@ func (r *ToolExecutor) Bindings() []toolcatalog.BindingSpec {
 	if r.daytona != nil && r.daytona.GetEnabled() {
 		bindings = append(bindings, toolcatalog.BindingSpec{Name: "daytona_data_analysis", Handler: r.daytonaDataAnalysis})
 	}
+	bindings = append(bindings, toolcatalog.BindingSpec{Name: "mineru_parse_document", Handler: r.mineruParseDocument})
 	return bindings
 }
 

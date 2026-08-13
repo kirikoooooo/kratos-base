@@ -361,7 +361,11 @@ const file_api_task_v1_task_proto_rawDesc = "" +
 	"\vTaskService\x12^\n" +
 	"\n" +
 	"CreateTask\x12\x1e.api.task.v1.CreateTaskRequest\x1a\x16.api.task.v1.TaskReply\"\x18\x82\xd3\xe4\x93\x02\x12:\x01*\"\r/api/v1/tasks\x12^\n" +
-	"\aGetTask\x12\x1b.api.task.v1.GetTaskRequest\x1a\x16.api.task.v1.TaskReply\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/tasks/{taskID}B\x1cZ\x1akratos-demo/api/task/v1;v1b\x06proto3"
+	"\aGetTask\x12\x1b.api.task.v1.GetTaskRequest\x1a\x16.api.task.v1.TaskReply\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/tasks/{taskID}2\x9b\x01\n" +
+	"\x13InternalTaskService\x12D\n" +
+	"\n" +
+	"CreateTask\x12\x1e.api.task.v1.CreateTaskRequest\x1a\x16.api.task.v1.TaskReply\x12>\n" +
+	"\aGetTask\x12\x1b.api.task.v1.GetTaskRequest\x1a\x16.api.task.v1.TaskReplyB\x1cZ\x1akratos-demo/api/task/v1;v1b\x06proto3"
 
 var (
 	file_api_task_v1_task_proto_rawDescOnce sync.Once
@@ -390,10 +394,14 @@ var file_api_task_v1_task_proto_depIdxs = []int32{
 	5, // 2: api.task.v1.TaskReply.updatedAt:type_name -> google.protobuf.Timestamp
 	2, // 3: api.task.v1.TaskService.CreateTask:input_type -> api.task.v1.CreateTaskRequest
 	3, // 4: api.task.v1.TaskService.GetTask:input_type -> api.task.v1.GetTaskRequest
-	4, // 5: api.task.v1.TaskService.CreateTask:output_type -> api.task.v1.TaskReply
-	4, // 6: api.task.v1.TaskService.GetTask:output_type -> api.task.v1.TaskReply
-	5, // [5:7] is the sub-list for method output_type
-	3, // [3:5] is the sub-list for method input_type
+	2, // 5: api.task.v1.InternalTaskService.CreateTask:input_type -> api.task.v1.CreateTaskRequest
+	3, // 6: api.task.v1.InternalTaskService.GetTask:input_type -> api.task.v1.GetTaskRequest
+	4, // 7: api.task.v1.TaskService.CreateTask:output_type -> api.task.v1.TaskReply
+	4, // 8: api.task.v1.TaskService.GetTask:output_type -> api.task.v1.TaskReply
+	4, // 9: api.task.v1.InternalTaskService.CreateTask:output_type -> api.task.v1.TaskReply
+	4, // 10: api.task.v1.InternalTaskService.GetTask:output_type -> api.task.v1.TaskReply
+	7, // [7:11] is the sub-list for method output_type
+	3, // [3:7] is the sub-list for method input_type
 	3, // [3:3] is the sub-list for extension type_name
 	3, // [3:3] is the sub-list for extension extendee
 	0, // [0:3] is the sub-list for field type_name
@@ -412,7 +420,7 @@ func file_api_task_v1_task_proto_init() {
 			NumEnums:      0,
 			NumMessages:   5,
 			NumExtensions: 0,
-			NumServices:   1,
+			NumServices:   2,
 		},
 		GoTypes:           file_api_task_v1_task_proto_goTypes,
 		DependencyIndexes: file_api_task_v1_task_proto_depIdxs,

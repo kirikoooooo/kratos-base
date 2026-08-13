@@ -18,10 +18,12 @@ LLM 调用 = Generation
 
 在 Langfuse Project 的 Settings > API Keys 创建 Key。不要把真实 Key 写入 `config.yaml`。
 
+将密钥写入项目根目录的 `.env`（该文件已被 Git 忽略），再在启动终端加载它：
+
 ```bash
-export LANGFUSE_PUBLIC_KEY='pk-lf-...'
-export LANGFUSE_SECRET_KEY='sk-lf-...'
-export LANGFUSE_BASE_URL='https://cloud.langfuse.com'
+set -a
+source .env
+set +a
 make cli
 ```
 

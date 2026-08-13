@@ -26,20 +26,20 @@
 ### 架构分层
 
 ```text
-cmd/kratos-demo/              # 入口、Wire 注入
-internal/
-  service/                    # HTTP JSON-RPC、Dashboard 适配
-  server/                     # Kratos Server
-  conf/                       # 配置 Proto
-  biz/                        # 仅 AgentRuntime / DelegationVerifier 契约
-  data/
-    model/                    # 领域模型与 Store 接口
-    agent/                    # LangChain runtime、记忆、工具
-    tasking/                  # TaskRepo、Dispatcher、Usecase
-    trace/                    # 委派 Trace
-    session/                  # 会话文件变更
-    common/                   # 共享工具
-api/                          # Proto 与生成代码
+api/                          # 全局 protobuf 契约与生成的 gRPC/HTTP binding
+  task/v1/                    # Runtime Task 读写契约
+  memory/v1/                  # Memory 读侧契约
+app/
+  agent-runtime/              # 执行面：A2A、Task、工具、LLM、Actor
+    cmd/                       # 可执行入口、Wire
+    configs/                   # Runtime 配置与 RBAC 策略
+  dashboard/                  # 控制面：HTTP/SSE；只通过 Task gRPC 调 Runtime
+    cmd/ internal/ configs/
+  memory/                     # 记忆读侧：gRPC Prompt Context
+    cmd/ internal/ configs/
+  gateway/                    # 预留：未来公网 BFF
+internal/                     # 迁移中的 Runtime 共享实现；逐步下沉到所属服务
+pkg/                          # 无业务语义的公共组件
 ```
 
 ### Agent 记忆目录（`data.agent_memory.dir`，默认 `.myagent`）
@@ -78,19 +78,41 @@ api/                          # Proto 与生成代码
 **HTTP + Dashboard（调试面板）**
 
 ```bash
-go run ./cmd/kratos-demo -conf ./configs
+go run ./app/agent-runtime/cmd -conf ./app/agent-runtime/configs
 # 或
 make run
 ```
 
 Dashboard：http://127.0.0.1:8000/debug/a2a
 
+**独立 Dashboard 控制面（阶段一）**
+
+先启动 Agent Runtime，再启动 Dashboard；Dashboard 不会在本进程执行 Agent：
+
+```bash
+make run
+make dashboard
+```
+
+Dashboard Task API: `http://127.0.0.1:8001/api/v1/tasks`。它通过 gRPC 调用
+`agent-runtime` 的 `api.task.v1.InternalTaskService`；分别用
+`AGENT_RUNTIME_GRPC_ADDR` 与 `DASHBOARD_HTTP_ADDR` 覆盖地址。
+
+**独立 Memory 读服务（阶段一）**
+
+```bash
+make memory
+```
+
+默认监听 `127.0.0.1:9002`，服务契约为 `api.memory.v1.MemoryService`。
+可通过 `MEMORY_GRPC_ADDR`、`MEMORY_DIR`、`MEMORY_USER_ID` 配置。
+
 **本地 CLI（类似 Claude Code）**
 
 启动全部 agent（default / router / coder / reviewer），交互消息默认由 **router** 接收并委派：
 
 ```bash
-go run ./cmd/kratos-demo -conf ./configs -cli
+go run ./app/agent-runtime/cmd -conf ./app/agent-runtime/configs -cli
 # 或
 make cli
 ```
@@ -103,7 +125,7 @@ CLI 命令：`/help` `/agents` `/session` `/new` `/exit`
 - HTTP: `http://127.0.0.1:8000`
 - A2A Dashboard: `http://127.0.0.1:8000/debug/a2a`
 
-### 配置示例（`configs/config.yaml`）
+### 配置示例（`app/agent-runtime/configs/config.yaml`）
 
 ```yaml
 data:

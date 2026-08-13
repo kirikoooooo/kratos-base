@@ -7,3 +7,6 @@ configs/
 .DS_Store
 __pycache__/
 *.py[cod]
+
+# Local secrets and environment-specific credentials.
+.env

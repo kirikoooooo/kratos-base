@@ -22,14 +22,14 @@ class MilvusConnector:
         self.client = MilvusClient(uri=uri, token=token, db_name=db_name)
 
     async def list_collections(self) -> list[str]:
-        """List all collections in the database."""
+        """列出当前数据库中的所有 collection。"""
         try:
             return self.client.list_collections()
         except Exception as e:
             raise ValueError(f"Failed to list collections: {str(e)}")
 
     async def get_collection_info(self, collection_name: str) -> dict:
-        """Get detailed information about a collection."""
+        """获取 collection 的详细信息。"""
         try:
             return self.client.describe_collection(collection_name)
         except Exception as e:
@@ -44,14 +44,14 @@ class MilvusConnector:
         drop_ratio: float = 0.2,
     ) -> list[dict]:
         """
-        Perform full text search on a collection.
+        在 collection 中执行全文检索。
 
         Args:
-            collection_name: Name of collection to search
-            query_text: Text to search for
-            limit: Maximum number of results
-            output_fields: Fields to return in results
-            drop_ratio: Proportion of low-frequency terms to ignore (0.0-1.0)
+            collection_name: 要检索的 collection 名称
+            query_text: 要检索的文本
+            limit: 最大返回结果数
+            output_fields: 结果中要返回的字段
+            drop_ratio: 忽略低频词的比例（0.0-1.0）
         """
         try:
             search_params = {"params": {"drop_ratio_search": drop_ratio}}
@@ -75,7 +75,7 @@ class MilvusConnector:
         output_fields: Optional[list[str]] = None,
         limit: int = 10,
     ) -> list[dict]:
-        """Query collection using filter expressions."""
+        """使用过滤表达式查询 collection。"""
         try:
             return self.client.query(
                 collection_name=collection_name,
@@ -99,18 +99,18 @@ class MilvusConnector:
         range_filter: Optional[float] = None,
     ) -> list[dict]:
         """
-        Perform vector similarity search on a collection.
+        在 collection 中执行向量相似度检索。
 
         Args:
-            collection_name: Name of collection to search
-            vector: Query vector
-            vector_field: Field containing vectors to search
-            limit: Maximum number of results
-            output_fields: Fields to return in results
-            metric_type: Distance metric (COSINE, L2, IP)
-            filter_expr: Optional filter expression
-            radius: Optional lower bound for range search
-            range_filter: Optional upper bound for range search
+            collection_name: 要检索的 collection 名称
+            vector: 查询向量
+            vector_field: 待检索的向量字段
+            limit: 最大返回结果数
+            output_fields: 结果中要返回的字段
+            metric_type: 距离度量（COSINE、L2、IP）
+            filter_expr: 可选的过滤表达式
+            radius: 范围检索的可选下界
+            range_filter: 范围检索的可选上界
         """
         try:
             search_params = {"metric_type": metric_type, "params": {"nprobe": 10}}
@@ -145,18 +145,18 @@ class MilvusConnector:
         range_filter: Optional[float] = None,
     ) -> list[dict]:
         """
-        Perform text similarity search on a collection.
+        在 collection 中执行文本相似度检索。
 
         Args:
-            collection_name: Name of collection to search
-            query_text: Text query for similarity search
-            anns_field: Field name for text search
-            limit: Maximum number of results
-            output_fields: Fields to return in results
-            metric_type: Distance metric (COSINE, L2, IP)
-            filter_expr: Optional filter expression
-            radius: Optional lower bound for range search
-            range_filter: Optional upper bound for range search
+            collection_name: 要检索的 collection 名称
+            query_text: 用于相似度检索的查询文本
+            anns_field: 文本检索字段名
+            limit: 最大返回结果数
+            output_fields: 结果中要返回的字段
+            metric_type: 距离度量（COSINE、L2、IP）
+            filter_expr: 可选的过滤表达式
+            radius: 范围检索的可选下界
+            range_filter: 范围检索的可选上界
         """
         try:
             search_params = {"metric_type": metric_type, "params": {"nprobe": 10}}
@@ -194,21 +194,21 @@ class MilvusConnector:
         dense_range_filter: Optional[float] = None,
     ) -> list[dict]:
         """
-        Perform hybrid search combining BM25 text search and vector search with RRF ranking.
+        执行混合检索：结合 BM25 文本检索、向量检索和 RRF 排序。
 
         Args:
-            collection_name: Name of collection to search
-            query_text: Text query for BM25 search
-            text_field: Field name for text search
-            vector: Query vector for dense vector search
-            vector_field: Field name for vector search
-            limit: Maximum number of results
-            output_fields: Fields to return in results
-            filter_expr: Optional filter expression
-            sparse_radius: Optional lower bound for sparse range search
-            sparse_range_filter: Optional upper bound for sparse range search
-            dense_radius: Optional lower bound for dense range search
-            dense_range_filter: Optional upper bound for dense range search
+            collection_name: 要检索的 collection 名称
+            query_text: BM25 检索的查询文本
+            text_field: 文本检索字段名
+            vector: 稠密向量检索的查询向量
+            vector_field: 向量检索字段名
+            limit: 最大返回结果数
+            output_fields: 结果中要返回的字段
+            filter_expr: 可选的过滤表达式
+            sparse_radius: 稀疏向量范围检索的可选下界
+            sparse_range_filter: 稀疏向量范围检索的可选上界
+            dense_radius: 稠密向量范围检索的可选下界
+            dense_range_filter: 稠密向量范围检索的可选上界
         """
         try:
             sparse_params = {"params": {"nprobe": 10}}
@@ -221,21 +221,21 @@ class MilvusConnector:
                 dense_params["params"]["radius"] = dense_radius
             if dense_range_filter is not None:
                 dense_params["params"]["range_filter"] = dense_range_filter
-            # BM25 search request
+            # BM25 检索请求
             sparse_request = AnnSearchRequest(
                 data=[query_text],
                 anns_field=text_field,
                 param=sparse_params,
                 limit=limit,
             )
-            # dense vector search request
+            # 稠密向量检索请求
             dense_request = AnnSearchRequest(
                 data=[vector],
                 anns_field=vector_field,
                 param=dense_params,
                 limit=limit,
             )
-            # hybrid search
+            # 混合检索
             results = self.client.hybrid_search(
                 collection_name=collection_name,
                 reqs=[sparse_request, dense_request],
@@ -263,29 +263,22 @@ class MilvusConnector:
         **kwargs: Any
     ) -> bool:
         """
-        Create a new collection with quick setup or customized schema.
+        通过快速配置或自定义 schema 创建 collection。
 
         Args:
-            collection_name: Name for the new collection
-            auto_id: whether to auto generate id, default to True
-            dimension: vector dimension, default to 768; for quick setup and will be ignored if field_schema is provided
-            primary_field_name: name of the primary field, default to "id"; for quick setup and will be ignored if field_schema is provided
-            vector_field_name: name of the vector field, default to "vector"; for quick setup and will be ignored if field_schema is provided
-            metric_type: metric type, default to "COSINE"; for quick setup and will be ignored if field_schema is provided
-            field_schema: List of field schema, each element is a dictionary with the following keys:
-                - name: name of the field
-                - type: type of the field
-                - dimension: dimension of the field
-                - index_type: index type
-            index_params: List of indexes with parameters, each element is a dictionary with the following keys:
-                - field_name: name of the field to index
-                - index_type: index type
-                - **kwargs: other optional index parameters
-                Default to None, which means no index will be created. If field_schema is not None, you will need to create index and then load collection manually after collection creation.
-            **kwargs: Additional parameters for the collection creation
+            collection_name: 新 collection 名称
+            auto_id: 是否自动生成主键 ID，默认 True
+            dimension: 向量维度，默认 768；快速创建时使用，提供 field_schema 时忽略
+            primary_field_name: 主键字段名，默认 "id"；提供 field_schema 时忽略
+            vector_field_name: 向量字段名，默认 "vector"；提供 field_schema 时忽略
+            metric_type: 度量类型，默认 "COSINE"；提供 field_schema 时忽略
+            field_schema: 字段 schema 列表；每项包含 name、type、dimension、index_type 等键
+            index_params: 索引及参数列表；每项包含 field_name、index_type 和其他索引参数。
+                默认 None，即不创建索引。使用 field_schema 时，创建 collection 后需要手动创建索引并加载。
+            **kwargs: 创建 collection 的额外参数
         """
         try:
-            # Check if collection already exists
+            # 检查 collection 是否已存在
             if collection_name in self.client.list_collections():
                 raise ValueError(f"Collection '{collection_name}' already exists")
 
@@ -309,7 +302,7 @@ class MilvusConnector:
                 for index_kwargs in index_params:
                     built_index_params.add_index(**index_kwargs)
 
-            # Create collection
+            # 创建 collection
             self.client.create_collection(
                 collection_name=collection_name,
                 auto_id=auto_id,
@@ -330,11 +323,11 @@ class MilvusConnector:
         self, collection_name: str, data: list[dict[str, Any]]
     ) -> dict[str, Any]:
         """
-        Insert data into a collection.
+        向 collection 写入数据。
 
         Args:
-            collection_name: Name of collection
-            data: List of dictionaries, each representing a record
+            collection_name: collection 名称
+            data: 记录字典列表
         """
         try:
             result = self.client.insert(collection_name=collection_name, data=data)
@@ -346,11 +339,11 @@ class MilvusConnector:
         self, collection_name: str, filter_expr: str
     ) -> dict[str, Any]:
         """
-        Delete entities from a collection based on filter expression.
+        根据过滤表达式删除 collection 中的实体。
 
         Args:
-            collection_name: Name of collection
-            filter_expr: Filter expression to select entities to delete
+            collection_name: collection 名称
+            filter_expr: 用于筛选待删除实体的过滤表达式
         """
         try:
             result = self.client.delete(
@@ -362,10 +355,10 @@ class MilvusConnector:
 
     async def get_collection_stats(self, collection_name: str) -> dict[str, Any]:
         """
-        Get statistics about a collection.
+        获取 collection 的统计信息。
 
         Args:
-            collection_name: Name of collection
+            collection_name: collection 名称
         """
         try:
             return self.client.get_collection_stats(collection_name)
@@ -384,17 +377,17 @@ class MilvusConnector:
         search_params: Optional[dict[str, Any]] = None,
     ) -> list[list[dict]]:
         """
-        Perform vector similarity search with multiple query vectors.
+        使用多个查询向量执行向量相似度检索。
 
         Args:
-            collection_name: Name of collection to search
-            vectors: List of query vectors
-            vector_field: Field containing vectors to search
-            limit: Maximum number of results per query
-            output_fields: Fields to return in results
-            metric_type: Distance metric (COSINE, L2, IP)
-            filter_expr: Optional filter expression
-            search_params: Additional search parameters
+            collection_name: 要检索的 collection 名称
+            vectors: 查询向量列表
+            vector_field: 待检索的向量字段
+            limit: 每个查询的最大返回结果数
+            output_fields: 结果中要返回的字段
+            metric_type: 距离度量（COSINE、L2、IP）
+            filter_expr: 可选的过滤表达式
+            search_params: 额外的检索参数
         """
         try:
             if search_params is None:
@@ -422,14 +415,14 @@ class MilvusConnector:
         params: Optional[dict[str, Any]] = None,
     ) -> bool:
         """
-        Create an index on a vector field.
+        为向量字段创建索引。
 
         Args:
-            collection_name: Name of collection
-            field_name: Field to index
-            index_type: Type of index (IVF_FLAT, HNSW, etc.)
-            metric_type: Distance metric (COSINE, L2, IP)
-            params: Additional index parameters
+            collection_name: collection 名称
+            field_name: 要建立索引的字段
+            index_type: 索引类型（IVF_FLAT、HNSW 等）
+            metric_type: 距离度量（COSINE、L2、IP）
+            params: 额外索引参数
         """
         try:
             if params is None:
@@ -454,12 +447,12 @@ class MilvusConnector:
         self, collection_name: str, data: dict[str, list[Any]], batch_size: int = 1000
     ) -> list[dict[str, Any]]:
         """
-        Insert data in batches for better performance.
+        分批写入数据以获得更好的性能。
 
         Args:
-            collection_name: Name of collection
-            data: Dictionary mapping field names to lists of values
-            batch_size: Number of records per batch
+            collection_name: collection 名称
+            data: 字段名到值列表的映射
+            batch_size: 每批记录数
         """
         try:
             results = []
@@ -484,11 +477,11 @@ class MilvusConnector:
         self, collection_name: str, replica_number: int = 1
     ) -> bool:
         """
-        Load a collection into memory for search and query.
+        将 collection 加载到内存中，以支持检索和查询。
 
         Args:
-            collection_name: Name of collection to load
-            replica_number: Number of replicas
+            collection_name: 要加载的 collection 名称
+            replica_number: 副本数量
         """
         try:
             self.client.load_collection(
@@ -500,10 +493,10 @@ class MilvusConnector:
 
     async def release_collection(self, collection_name: str) -> bool:
         """
-        Release a collection from memory.
+        从内存中释放 collection。
 
         Args:
-            collection_name: Name of collection to release
+            collection_name: 要释放的 collection 名称
         """
         try:
             self.client.release_collection(collection_name=collection_name)
@@ -513,10 +506,10 @@ class MilvusConnector:
 
     async def get_query_segment_info(self, collection_name: str) -> dict[str, Any]:
         """
-        Get information about query segments.
+        获取查询分片的信息。
 
         Args:
-            collection_name: Name of collection
+            collection_name: collection 名称
         """
         try:
             return self.client.get_query_segment_info(collection_name)
@@ -527,11 +520,11 @@ class MilvusConnector:
         self, collection_name: str, data: dict[str, list[Any]]
     ) -> dict[str, Any]:
         """
-        Upsert data into a collection (insert or update if exists).
+        向 collection 执行 upsert（插入或更新已存在的数据）。
 
         Args:
-            collection_name: Name of collection
-            data: Dictionary mapping field names to lists of values
+            collection_name: collection 名称
+            data: 字段名到值列表的映射
         """
         try:
             result = self.client.upsert(collection_name=collection_name, data=data)
@@ -543,11 +536,11 @@ class MilvusConnector:
         self, collection_name: str, field_name: Optional[str] = None
     ) -> dict[str, Any]:
         """
-        Get information about indexes in a collection.
+        获取 collection 中索引的信息。
 
         Args:
-            collection_name: Name of collection
-            field_name: Optional specific field to get index info for
+            collection_name: collection 名称
+            field_name: 可选；指定要获取索引信息的字段
         """
         try:
             return self.client.describe_index(
@@ -560,10 +553,10 @@ class MilvusConnector:
         self, collection_name: str
     ) -> dict[str, Any]:
         """
-        Get the loading progress of a collection.
+        获取 collection 的加载进度。
 
         Args:
-            collection_name: Name of collection
+            collection_name: collection 名称
         """
         try:
             return self.client.get_load_state(collection_name)
@@ -571,20 +564,20 @@ class MilvusConnector:
             raise ValueError(f"Failed to get loading progress: {str(e)}")
 
     async def list_databases(self) -> list[str]:
-        """List all databases in the Milvus instance."""
+        """列出 Milvus 实例中的所有数据库。"""
         try:
             return self.client.list_databases()
         except Exception as e:
             raise ValueError(f"Failed to list databases: {str(e)}")
 
     async def use_database(self, db_name: str) -> bool:
-        """Switch to a different database.
+        """切换到其他数据库。
 
         Args:
-            db_name: Name of the database to use
+            db_name: 要使用的数据库名称
         """
         try:
-            # Create a new client with the specified database
+            # 为指定数据库创建新的客户端
             self.client = MilvusClient(uri=self.uri, token=self.token, db_name=db_name)
             return True
         except Exception as e:
@@ -598,7 +591,7 @@ class MilvusContext:
 
 @asynccontextmanager
 async def server_lifespan(server: FastMCP) -> AsyncIterator[MilvusContext]:
-    """Manage application lifecycle for Milvus connector."""
+    """管理 Milvus 连接器的应用生命周期。"""
     config = server.config
 
     connector = MilvusConnector(
@@ -626,14 +619,14 @@ async def milvus_text_search(
     ctx: Context = None,
 ) -> str:
     """
-    Search for documents using full text search in a Milvus collection.
+    在 Milvus collection 中通过全文检索查找文档。
 
     Args:
-        collection_name: Name of the collection to search
-        query_text: Text to search for
-        limit: Maximum number of results to return
-        output_fields: Fields to include in results
-        drop_ratio: Proportion of low-frequency terms to ignore (0.0-1.0)
+        collection_name: 要检索的 collection 名称
+        query_text: 要检索的文本
+        limit: 最大返回结果数
+        output_fields: 结果中要包含的字段
+        drop_ratio: 忽略低频词的比例（0.0-1.0）
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -658,7 +651,7 @@ async def milvus_text_search(
 
 @mcp.tool()
 async def milvus_list_collections(ctx: Context) -> str:
-    """List all collections in the database."""
+    """列出当前数据库中的所有 collection。"""
     try:
         connector = ctx.request_context.lifespan_context.connector
         collections = await connector.list_collections()
@@ -676,13 +669,13 @@ async def milvus_query(
     ctx: Context = None,
 ) -> str:
     """
-    Query collection using filter expressions.
+    使用过滤表达式查询 collection。
 
     Args:
-        collection_name: Name of the collection to query
-        filter_expr: Filter expression (e.g. 'age > 20')
-        output_fields: Fields to include in results
-        limit: Maximum number of results
+        collection_name: 要查询的 collection 名称
+        filter_expr: 过滤表达式（例如 `age > 20`）
+        output_fields: 结果中要包含的字段
+        limit: 最大返回结果数
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -718,18 +711,18 @@ async def milvus_vector_search(
     ctx: Context = None,
 ) -> str:
     """
-    Perform vector similarity search on a collection.
+    在 collection 中执行向量相似度检索。
 
     Args:
-        collection_name: Name of the collection to search
-        vector: Query vector
-        vector_field: Field containing vectors to search
-        limit: Maximum number of results
-        output_fields: Fields to include in results
-        metric_type: Distance metric (COSINE, L2, IP)
-        filter_expr: Optional filter expression
-        radius: Optional lower bound for range search
-        range_filter: Optional upper bound for range search
+        collection_name: 要检索的 collection 名称
+        vector: 查询向量
+        vector_field: 待检索的向量字段
+        limit: 最大返回结果数
+        output_fields: 结果中要包含的字段
+        metric_type: 距离度量（COSINE、L2、IP）
+        filter_expr: 可选的过滤表达式
+        radius: 范围检索的可选下界
+        range_filter: 范围检索的可选上界
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -771,21 +764,21 @@ async def milvus_hybrid_search(
     ctx: Context = None,
 ) -> str:
     """
-    Perform hybrid search combining text and vector search.
+    执行结合文本与向量检索的混合检索。
 
     Args:
-        collection_name: Name of collection to search
-        query_text: Text query for BM25 search
-        text_field: Field name for text search
-        vector: Query vector for dense vector search
-        vector_field: Field name for vector search
-        limit: Maximum number of results
-        output_fields: Fields to return in results
-        filter_expr: Optional filter expression
-        sparse_radius: Optional lower bound for sparse range search
-        sparse_range_filter: Optional upper bound for sparse range search
-        dense_radius: Optional lower bound for dense range search
-        dense_range_filter: Optional upper bound for dense range search
+        collection_name: 要检索的 collection 名称
+        query_text: BM25 检索的查询文本
+        text_field: 文本检索字段名
+        vector: 稠密向量检索的查询向量
+        vector_field: 向量检索字段名
+        limit: 最大返回结果数
+        output_fields: 结果中要返回的字段
+        filter_expr: 可选的过滤表达式
+        sparse_radius: 稀疏向量范围检索的可选下界
+        sparse_range_filter: 稀疏向量范围检索的可选上界
+        dense_radius: 稠密向量范围检索的可选下界
+        dense_range_filter: 稠密向量范围检索的可选上界
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -830,18 +823,18 @@ async def milvus_text_similarity_search(
     ctx: Context = None,
 ) -> str:
     """
-    Perform text similarity search on a collection.
+    在 collection 中执行文本相似度检索。
 
     Args:
-        collection_name: Name of collection to search
-        query_text: Text query for similarity search
-        anns_field: Field name for text search
-        limit: Maximum number of results
-        output_fields: Fields to include in results
-        metric_type: Distance metric (COSINE, L2, IP)
-        filter_expr: Optional filter expression
-        radius: Optional lower bound for range search
-        range_filter: Optional upper bound for range search
+        collection_name: 要检索的 collection 名称
+        query_text: 用于相似度检索的查询文本
+        anns_field: 文本检索字段名
+        limit: 最大返回结果数
+        output_fields: 结果中要包含的字段
+        metric_type: 距离度量（COSINE、L2、IP）
+        filter_expr: 可选的过滤表达式
+        radius: 范围检索的可选下界
+        range_filter: 范围检索的可选上界
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -880,23 +873,18 @@ async def milvus_create_collection(
     ctx: Context = None,
 ) -> str:
     """
-    Create a new collection with specified schema.
+    使用指定 schema 创建新的 collection。
 
     Args:
-        collection_name: Name for the new collection
-        auto_id: whether to auto generate id, default to True
-        dimension: vector dimension, default to 768; for quick setup and will be ignored if field_schema is provided
-        primary_field_name: name of the primary field, default to "id"; for quick setup and will be ignored if field_schema is provided
-        vector_field_name: name of the vector field, default to "vector"; for quick setup and will be ignored if field_schema is provided
-        metric_type: metric type, default to "COSINE"; for quick setup and will be ignored if field_schema is provided
-        field_schema: List of field schema, each element is a dictionary with the following keys:
-            - name: name of the field
-            - type: type of the field
-        index_params: Optional list of index parameters, each element is a dictionary with the following keys:
-            - field_name: name of the field to index
-            - index_type: index type
-            - **kwargs: other optional index parameters
-        other_kwargs: Additional keyword arguments for the collection creation
+        collection_name: 新 collection 名称
+        auto_id: 是否自动生成主键 ID，默认 True
+        dimension: 向量维度，默认 768；提供 field_schema 时忽略
+        primary_field_name: 主键字段名，默认 "id"；提供 field_schema 时忽略
+        vector_field_name: 向量字段名，默认 "vector"；提供 field_schema 时忽略
+        metric_type: 度量类型，默认 "COSINE"；提供 field_schema 时忽略
+        field_schema: 字段 schema 列表，每项包含 name、type 等键
+        index_params: 可选的索引参数列表，每项包含 field_name、index_type 等键
+        other_kwargs: 创建 collection 的额外关键字参数
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -922,11 +910,11 @@ async def milvus_insert_data(
     collection_name: str, data: list[dict[str, Any]], ctx: Context = None
 ) -> str:
     """
-    Insert data into a collection.
+    向 collection 写入数据。
 
     Args:
-        collection_name: Name of collection
-        data: List of dictionaries, each representing a record
+        collection_name: collection 名称
+        data: 记录字典列表
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -942,11 +930,11 @@ async def milvus_delete_entities(
     collection_name: str, filter_expr: str, ctx: Context = None
 ) -> str:
     """
-    Delete entities from a collection based on filter expression.
+    根据过滤表达式删除 collection 中的实体。
 
     Args:
-        collection_name: Name of collection
-        filter_expr: Filter expression to select entities to delete
+        collection_name: collection 名称
+        filter_expr: 用于筛选待删除实体的过滤表达式
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -964,11 +952,11 @@ async def milvus_load_collection(
     collection_name: str, replica_number: int = 1, ctx: Context = None
 ) -> str:
     """
-    Load a collection into memory for search and query.
+    将 collection 加载到内存中，以支持检索和查询。
 
     Args:
-        collection_name: Name of collection to load
-        replica_number: Number of replicas
+        collection_name: 要加载的 collection 名称
+        replica_number: 副本数量
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -984,10 +972,10 @@ async def milvus_load_collection(
 @mcp.tool()
 async def milvus_release_collection(collection_name: str, ctx: Context = None) -> str:
     """
-    Release a collection from memory.
+    从内存中释放 collection。
 
     Args:
-        collection_name: Name of collection to release
+        collection_name: 要释放的 collection 名称
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -1000,7 +988,7 @@ async def milvus_release_collection(collection_name: str, ctx: Context = None) -
 
 @mcp.tool()
 async def milvus_list_databases(ctx: Context = None) -> str:
-    """List all databases in the Milvus instance."""
+    """列出 Milvus 实例中的所有数据库。"""
     try:
         connector = ctx.request_context.lifespan_context.connector
         databases = await connector.list_databases()
@@ -1012,10 +1000,10 @@ async def milvus_list_databases(ctx: Context = None) -> str:
 @mcp.tool()
 async def milvus_use_database(db_name: str, ctx: Context = None) -> str:
     """
-    Switch to a different database.
+    切换到其他数据库。
 
     Args:
-        db_name: Name of the database to use
+        db_name: 要使用的数据库名称
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -1029,10 +1017,10 @@ async def milvus_use_database(db_name: str, ctx: Context = None) -> str:
 @mcp.tool()
 async def milvus_get_collection_info(collection_name: str, ctx: Context = None) -> str:
     """
-    Lists detailed information about a specific collection
+    列出指定 collection 的详细信息。
 
     Args:
-        collection_name: Name of collection to load
+        collection_name: 要查看的 collection 名称
     """
     try:
         connector = ctx.request_context.lifespan_context.connector
@@ -1044,33 +1032,33 @@ async def milvus_get_collection_info(collection_name: str, ctx: Context = None) 
 
 
 def parse_arguments():
-    parser = argparse.ArgumentParser(description="Milvus MCP Server")
+    parser = argparse.ArgumentParser(description="Milvus MCP 服务")
     parser.add_argument(
         "--milvus-uri",
         type=str,
         default="http://localhost:19530",
-        help="Milvus server URI",
+        help="Milvus 服务 URI",
     )
     parser.add_argument(
-        "--milvus-token", type=str, default=None, help="Milvus authentication token"
+        "--milvus-token", type=str, default=None, help="Milvus 认证令牌"
     )
     parser.add_argument(
-        "--milvus-db", type=str, default="default", help="Milvus database name"
+        "--milvus-db", type=str, default="default", help="Milvus 数据库名称"
     )
-    parser.add_argument("--sse", action="store_true", help="Enable SSE mode")
+    parser.add_argument("--sse", action="store_true", help="启用 SSE 模式")
     parser.add_argument(
         "--streamable-http",
         dest="streamable_http",
         action="store_true",
-        help="Enable Streamable HTTP transport (recommended for production)"
+        help="启用 Streamable HTTP 传输（推荐用于生产环境）"
     )
     parser.add_argument(
         "--stateless",
         action="store_true",
-        help="Run in stateless mode (no session persistence, for Streamable HTTP only)"
+        help="以无状态模式运行（不持久化会话，仅适用于 Streamable HTTP）"
     )
     parser.add_argument(
-        "--port", type=int, default=8000, help="Port number for SSE/Streamable HTTP server"
+        "--port", type=int, default=8000, help="SSE/Streamable HTTP 服务端口"
     )
     return parser.parse_args()
 

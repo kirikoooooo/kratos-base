@@ -3,6 +3,7 @@ package conf
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -25,6 +26,9 @@ func TestEnsureConfigPathBootstrapsDefault(t *testing.T) {
 	}
 	if len(data) == 0 {
 		t.Fatal("expected non-empty default config")
+	}
+	if !strings.Contains(string(data), "--milvus-uri\", \".myagent/milvus.db") {
+		t.Fatalf("default config must use a local Milvus Lite database, got:\n%s", data)
 	}
 
 	gotAgain, err := EnsureConfigPath(configDir)

@@ -21,6 +21,7 @@ import (
 	"kratos-demo/internal/data/mcp"
 	agentmemory "kratos-demo/internal/data/memory"
 	"kratos-demo/internal/data/provider"
+	ragparser "kratos-demo/internal/data/agent_runtime/rag"
 	datasession "kratos-demo/internal/data/session"
 	agenttool "kratos-demo/internal/data/tool"
 	datatrace "kratos-demo/internal/data/trace"
@@ -65,6 +66,7 @@ type agentRuntime struct {
 	toolCatalogErr error
 	mcpClients     []*mcp.Client
 	mcpTools       []lmm.Tool
+	docParser      *ragparser.DocumentParser
 }
 
 func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatrace.DelegationTraceStore, sessions datasession.SessionStore, memory agentmemory.AgentMemory, logger log.Logger, security ...*conf.Security) biz.AgentRuntime {
@@ -99,6 +101,13 @@ func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatra
 		toolCatalog:    catalog,
 		toolCatalogErr: err,
 	}
+	if localTools != nil {
+		if parser, parserErr := ragparser.NewDocumentParser(localTools.WorkspaceRoot()); parserErr != nil {
+			helper.Warnf("create document parser failed: %v", parserErr)
+		} else {
+			runtime.docParser = parser
+		}
+	}
 	if runtimeConfig != nil {
 		if localTools != nil {
 			localTools.SetDaytona(runtimeConfig.GetDaytona())
@@ -116,6 +125,14 @@ func NewAgentRuntime(config *conf.AI, runtimeConfig *conf.Runtime, trace datatra
 
 func (r *agentRuntime) PID() actorpkg.PID {
 	return r.pid
+}
+
+// ParseDocument 解析工作区文档：PDF 走 MinerU，TXT/MD 直接读取。供 RAG 入库管线调用。
+func (r *agentRuntime) ParseDocument(ctx context.Context, relPath string) (ragparser.ParseResult, error) {
+	if r.docParser == nil {
+		return ragparser.ParseResult{}, errors.New("document parser unavailable")
+	}
+	return r.docParser.Parse(ctx, relPath)
 }
 
 func (r *agentRuntime) Process(msg *actorpkg.Message) {

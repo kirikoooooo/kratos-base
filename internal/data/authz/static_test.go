@@ -33,6 +33,33 @@ func TestCasbinAuthorizerLoadsModelAndPolicyFiles(t *testing.T) {
 	}
 }
 
+func TestRuntimePolicyAllowsDeveloperToReadMonorepoLayout(t *testing.T) {
+	root := filepath.Join("..", "..", "..")
+	policyFile := filepath.Join(root, "app", "agent-runtime", "configs", "casbin", "policy.csv")
+	modelFile := filepath.Join(root, "app", "agent-runtime", "configs", "casbin", "model.conf")
+	authorizer, err := NewCasbinFileAuthorizer(&conf.Security{
+		Enabled:          true,
+		LocalPrincipal:   "local-dev",
+		CasbinModelFile:  modelFile,
+		CasbinPolicyFile: policyFile,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := authorizer.LocalPrincipal("local-dev")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{".", "go.mod", "Makefile", "app/agent-runtime/cmd/main.go", "pkg/kernel/task.go"} {
+		if err := authorizer.Authorize(context.Background(), principal, bizauthz.Request{Permission: "tool.read_file", Path: path}); err != nil {
+			t.Fatalf("expected developer to read %q: %v", path, err)
+		}
+	}
+	if err := authorizer.Authorize(context.Background(), principal, bizauthz.Request{Permission: "tool.write_file", Path: "app/agent-runtime/cmd/main.go"}); err == nil {
+		t.Fatal("read policy must not grant write access")
+	}
+}
+
 func TestCasbinAuthorizerDeniesUnlistedToolAndPath(t *testing.T) {
 	authorizer, err := NewCasbinAuthorizer(&conf.Security{Enabled: true,
 		Principals: []*conf.Security_Principal{{Id: "dev", Roles: []string{"developer"}}},
